@@ -1,20 +1,26 @@
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundColor(.accentColor)
-            Text("Hello, world!")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .padding()
+    
+    private enum Tabs: Hashable {
+        case general, advanced
     }
-}
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+    var body: some View {
+        TabView {
+            GeneralSettingsView()
+                .tabItem {
+                    Label("General", systemImage: "gear")
+                }
+                .tag(Tabs.general)
+            AdvancedSettingsView()
+                .tabItem {
+                    Label("Advanced", systemImage: "star")
+                }
+                .tag(Tabs.advanced)
+        }
+        .padding(20)
+        .frame(width: 375, height: 150)
     }
+    
 }

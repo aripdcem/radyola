@@ -7,25 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B218CD342A02EF0500C744B8 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B218CD332A02EF0500C744B8 /* StatusBarController.swift */; };
+		B25397FE2A0301C900802DDB /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */; };
+		B25398002A03021500802DDB /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */; };
 		B2A073572A02E90B001DCE0D /* MacTileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073562A02E90B001DCE0D /* MacTileApp.swift */; };
 		B2A073592A02E90B001DCE0D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073582A02E90B001DCE0D /* ContentView.swift */; };
 		B2A0735B2A02E90C001DCE0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2A0735A2A02E90C001DCE0D /* Assets.xcassets */; };
 		B2A0735E2A02E90C001DCE0D /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2A0735D2A02E90C001DCE0D /* Preview Assets.xcassets */; };
-		B2A073662A02E939001DCE0D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073652A02E939001DCE0D /* AppDelegate.swift */; };
-		B2A073682A02EAAC001DCE0D /* HelloView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073672A02EAAC001DCE0D /* HelloView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B218CD332A02EF0500C744B8 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
+		B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
+		B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsView.swift; sourceTree = "<group>"; };
 		B2A073532A02E90B001DCE0D /* MacTile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacTile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2A073562A02E90B001DCE0D /* MacTileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTileApp.swift; sourceTree = "<group>"; };
 		B2A073582A02E90B001DCE0D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B2A0735A2A02E90C001DCE0D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B2A0735D2A02E90C001DCE0D /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		B2A0735F2A02E90C001DCE0D /* MacTile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MacTile.entitlements; sourceTree = "<group>"; };
-		B2A073652A02E939001DCE0D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		B2A073672A02EAAC001DCE0D /* HelloView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelloView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,7 +40,6 @@
 		B2A0734A2A02E90B001DCE0D = {
 			isa = PBXGroup;
 			children = (
-				B218CD332A02EF0500C744B8 /* StatusBarController.swift */,
 				B2A073552A02E90B001DCE0D /* MacTile */,
 				B2A073542A02E90B001DCE0D /* Products */,
 			);
@@ -61,11 +58,11 @@
 			children = (
 				B2A073562A02E90B001DCE0D /* MacTileApp.swift */,
 				B2A073582A02E90B001DCE0D /* ContentView.swift */,
-				B2A073672A02EAAC001DCE0D /* HelloView.swift */,
+				B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */,
+				B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */,
 				B2A0735A2A02E90C001DCE0D /* Assets.xcassets */,
 				B2A0735F2A02E90C001DCE0D /* MacTile.entitlements */,
 				B2A0735C2A02E90C001DCE0D /* Preview Content */,
-				B2A073652A02E939001DCE0D /* AppDelegate.swift */,
 			);
 			path = MacTile;
 			sourceTree = "<group>";
@@ -148,11 +145,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B2A073662A02E939001DCE0D /* AppDelegate.swift in Sources */,
-				B2A073682A02EAAC001DCE0D /* HelloView.swift in Sources */,
 				B2A073592A02E90B001DCE0D /* ContentView.swift in Sources */,
-				B218CD342A02EF0500C744B8 /* StatusBarController.swift in Sources */,
 				B2A073572A02E90B001DCE0D /* MacTileApp.swift in Sources */,
+				B25397FE2A0301C900802DDB /* GeneralSettingsView.swift in Sources */,
+				B25398002A03021500802DDB /* AdvancedSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
