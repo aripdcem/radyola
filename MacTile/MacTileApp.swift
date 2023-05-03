@@ -1,16 +1,12 @@
-//
-//  MacTileApp.swift
-//  MacTile
-//
-//  Created by Cem Selman on 3.05.2023.
-//
-
 import SwiftUI
 
 @main
 struct MacTileApp: App {
+    
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
-        WindowGroup {
+        Settings {
             ContentView()
         }
     }

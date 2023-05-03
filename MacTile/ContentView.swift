@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  MacTile
-//
-//  Created by Cem Selman on 3.05.2023.
-//
-
 import SwiftUI
 
 struct ContentView: View {
@@ -14,6 +7,7 @@ struct ContentView: View {
                 .imageScale(.large)
                 .foregroundColor(.accentColor)
             Text("Hello, world!")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding()
     }
