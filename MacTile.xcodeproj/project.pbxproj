@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		B25397FE2A0301C900802DDB /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */; };
 		B25398002A03021500802DDB /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */; };
+		B295EBB42A07B8300040170B /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295EBB32A07B8300040170B /* StreamView.swift */; };
+		B295EBB62A07BA600040170B /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295EBB52A07BA600040170B /* SoundManager.swift */; };
 		B2A073572A02E90B001DCE0D /* MacTileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073562A02E90B001DCE0D /* MacTileApp.swift */; };
 		B2A073592A02E90B001DCE0D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073582A02E90B001DCE0D /* ContentView.swift */; };
 		B2A0735B2A02E90C001DCE0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2A0735A2A02E90C001DCE0D /* Assets.xcassets */; };
@@ -18,6 +20,8 @@
 /* Begin PBXFileReference section */
 		B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
 		B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsView.swift; sourceTree = "<group>"; };
+		B295EBB32A07B8300040170B /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
+		B295EBB52A07BA600040170B /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 		B2A073532A02E90B001DCE0D /* MacTile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacTile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2A073562A02E90B001DCE0D /* MacTileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTileApp.swift; sourceTree = "<group>"; };
 		B2A073582A02E90B001DCE0D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -56,8 +60,10 @@
 		B2A073552A02E90B001DCE0D /* MacTile */ = {
 			isa = PBXGroup;
 			children = (
+				B295EBB52A07BA600040170B /* SoundManager.swift */,
 				B2A073562A02E90B001DCE0D /* MacTileApp.swift */,
 				B2A073582A02E90B001DCE0D /* ContentView.swift */,
+				B295EBB32A07B8300040170B /* StreamView.swift */,
 				B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */,
 				B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */,
 				B2A0735A2A02E90C001DCE0D /* Assets.xcassets */,
@@ -149,6 +155,8 @@
 				B2A073572A02E90B001DCE0D /* MacTileApp.swift in Sources */,
 				B25397FE2A0301C900802DDB /* GeneralSettingsView.swift in Sources */,
 				B25398002A03021500802DDB /* AdvancedSettingsView.swift in Sources */,
+				B295EBB42A07B8300040170B /* StreamView.swift in Sources */,
+				B295EBB62A07BA600040170B /* SoundManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

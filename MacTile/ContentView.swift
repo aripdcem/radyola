@@ -3,11 +3,16 @@ import SwiftUI
 struct ContentView: View {
     
     private enum Tabs: Hashable {
-        case general, advanced
+        case stream, general, advanced
     }
 
     var body: some View {
         TabView {
+            StreamView()
+                .tabItem {
+                    Label("Stream", systemImage: "waveform.circle")
+                }
+                .tag(Tabs.stream)
             GeneralSettingsView()
                 .tabItem {
                     Label("General", systemImage: "gear")
