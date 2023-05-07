@@ -31,8 +31,6 @@ private struct StreamRowView: View {
                     .font(.headline)
                 Text("by \(stream.author)")
                     .font(.subheadline)
-                Text("\(stream.pages) pages")
-                    .font(.subheadline)
             }
             Spacer()
         }
@@ -55,21 +53,30 @@ private class StreamViewModel: ObservableObject {
 
 struct Stream: Identifiable {
     var id = UUID()
-    var title: String
     var author: String
-    var isbn: String
-    var pages: Int
+    var title: String
     var url: String
-    var isRead: Bool = false
 }
 
 extension Stream {
     static let samples = [
-        Stream(title: "ITU Radio Jazz/Blues", author: "Matt Gemmell", isbn: "9781916265202", pages: 476, url: "http://160.75.86.29:8088/listen.pls?sid=3"),
-        Stream(title: "Açık Radyo", author: "Matt Gemmell", isbn: "9781916265202", pages: 476, url: "https://stream.34bit.net/ar.mp3"),
-        Stream(title: "Changer", author: "Matt Gemmell", isbn: "9781916265202", pages: 476, url: "https://"),
-        Stream(title: "SwiftUI for Absolute Beginners", author: "Jayant Varma", isbn: "9781484255155", pages: 200, url: "https://"),
-        Stream(title: "Why we sleep", author: "Matthew Walker", isbn: "9780141983769", pages: 368, url: "https://"),
-        Stream(title: "The Hitchhiker's Guide to the Galaxy", author: "Douglas Adams", isbn: "9780671461492", pages: 216, url: "https://")
+        Stream(author: "Stream", title: "Açık Radyo", url: "https://stream.34bit.net/ar.mp3"),
+        Stream(author: "Stream", title: "Sputnik Türkiye", url: "https://nfw.ria.ru/flv/audio.aspx?ID=98318704&type=mp3"),
+        Stream(author: "Stream", title: "ITU Radio Jazz/Blues", url: "http://160.75.86.29:8088/listen.pls?sid=3"),
+        Stream(author: "Stream", title: "ITU Radio Classical", url: "http://160.75.86.29:8088/listen.pls?sid=5"),
+        Stream(author: "Stream", title: "MUSIQ3", url: "https://redbeemedia.streamabc.net/redbm-musiq3-aac-256-1558698"),
+        Stream(author: "Stream", title: "VRT Klara", url: "http://icecast-servers.vrtcdn.be/klara-high.mp3"),
+        Stream(author: "Stream", title: "Viva Brabant Wallon", url: "https://radio.rtbf.be/viva-bw/aac-128"),
+        Stream(author: "Stream", title: "ITU Radio Rock", url: "http://160.75.86.29:8088/listen.pls?sid=1"),
+        Stream(author: "Stream", title: "BBC Radio 1", url: "http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/http-icy-mp3-a/vpid/bbc_radio_one/format/pls.pls"),
+        Stream(author: "Stream", title: "BBC World Service News", url: "http://open.live.bbc.co.uk/mediaselector/5/select/mediaset/http-icy-mp3-a/format/pls/proto/http/vpid/bbc_world_service.pls"),
+        Stream(author: "Stream", title: "Radyo TRT Haber", url: "https://nmicenotrt.mediatriple.net/trt_haber.aac"),
+        Stream(author: "Stream", title: "NTV Radyo", url: "https://dygedge.radyotvonline.net/ntvradyo/playlist.m3u8"),
+        Stream(author: "Stream", title: "HABERTÜRK Radyo", url: "https://ciner-live.ercdn.net/haberturkradyo/haberturkradyo_1.m3u8"),
+        Stream(author: "Stream", title: "Radio Panik", url: "https://streaming.domainepublic.net/radiopanik.mp3"),
+        Stream(author: "Stream", title: "Radyo Bozcaada", url: "http://radyobozcaada.canliyayinda.com:4000/stream"),
+        Stream(author: "Stream", title: "Radyo Gökçeada", url: "https://radyogok.80.yayin.com.tr/stream"),
+        Stream(author: "Stream", title: "Radyo Boğaziçi", url: "http://nova.radyobogazici.net:7008/listen"),
+        Stream(author: "Stream", title: "Μινόρε Καλλονής, Kalloni, Greece", url: "https://i4.streams.ovh:2200/ssl/minore?mp=/stream")
     ]
 }
