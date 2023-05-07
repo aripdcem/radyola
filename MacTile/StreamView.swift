@@ -3,40 +3,49 @@ import SwiftUI
 struct StreamView: View {
     
     @StateObject fileprivate var viewModel = StreamViewModel()
-    
-    @State var song1 = false
-    @StateObject private var soundManager = SoundManager()
-
+        
     var body: some View {
         List(viewModel.streams) { stream in
-            HStack(alignment: .top) {
-                Image(systemName: song1 ? "pause.circle.fill": "play.circle.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: 30)
-                VStack(alignment: .leading) {
-                    Text(stream.title)
-                        .font(.headline)
-                    Text("by \(stream.author)")
-                        .font(.subheadline)
-                    Text("\(stream.pages) pages")
-                        .font(.subheadline)
-                }
-                Spacer()
-            }
-            .onTapGesture {
-                soundManager.playSound(sound: stream.url)
-                song1.toggle()
-                
-                if song1 {
-                    soundManager.audioPlayer?.play()
-                } else {
-                    soundManager.audioPlayer?.pause()
-                }
-            }
+            StreamRowView(stream: stream)
         }
         .padding()
         .frame(width: 350, height: 100)
+    }
+}
+
+private struct StreamRowView: View {
+
+    @State private var song1 = false
+    @StateObject private var soundManager = SoundManager()
+
+    var stream: Stream
+    
+    var body: some View {
+        HStack(alignment: .top) {
+            Image(systemName: song1 ? "pause.circle.fill": "play.circle.fill")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 40)
+            VStack(alignment: .leading) {
+                Text(stream.title)
+                    .font(.headline)
+                Text("by \(stream.author)")
+                    .font(.subheadline)
+                Text("\(stream.pages) pages")
+                    .font(.subheadline)
+            }
+            Spacer()
+        }
+        .onTapGesture {
+            soundManager.playSound(sound: stream.url)
+            song1.toggle()
+            
+            if song1 {
+                soundManager.audioPlayer?.play()
+            } else {
+                soundManager.audioPlayer?.pause()
+            }
+        }
     }
 }
 
