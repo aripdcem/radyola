@@ -206,6 +206,7 @@ GStreamer `playbin` elemanı kullanılır. Bu, GStreamer'ın en yüksek seviyeli
 - Freedesktop `.desktop` dosyası (masaüstü entegrasyonu)
 - MPRIS v2.2 D-Bus entegrasyonu (media tuşları, GNOME/KDE kontrolleri)
 - StatusNotifierItem system tray ikonu (graceful fallback)
+- DBusMenu system tray menüsü (istasyon seçimi, oynatma kontrolleri, pencere açmadan)
 - Arka plan çalma (pencere kapatıldığında radyo devam eder)
 
 ### 🚧 Gelecekte Eklenebilecek Özellikler
@@ -215,7 +216,7 @@ GStreamer `playbin` elemanı kullanılır. Bu, GStreamer'ın en yüksek seviyeli
 - "Now Playing" metadata gösterimi (ICY/Shoutcast stream bilgisi)
 - Klavye kısayolları (play/pause/stop/next)
 - İstasyon arama/filtreleme
-- System tray sağ tık menüsü (DBusMenu protokolü ile istasyon seçimi)
+- System tray sağ tık menüsü genişletme (alt menüler, favoriler)
 
 ### ⚠️ Bilinen Kısıtlamalar
 - Tüm istasyonlar hardcoded — harici yapılandırma dosyası kullanılmıyor

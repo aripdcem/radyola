@@ -502,6 +502,305 @@ if HAS_DBUS:
 
 
 # ──────────────────────────────────────────────
+# DBusMenu Servisi (System Tray Menüsü)
+# ──────────────────────────────────────────────
+
+
+if HAS_DBUS:
+
+    class DBusMenuService(dbus.service.Object):
+        """com.canonical.dbusmenu protokolü ile system tray menüsü.
+
+        Tray ikonuna tıklandığında radyo kanallarını, oynatma kontrollerini
+        ve çıkış seçeneğini bir menü olarak gösterir. Pencere açılmaz.
+
+        Menü yapısı:
+            ── Radyola ──────────────
+            ▶ 🇹🇷 Açık Radyo (Kültür)
+            ▶ 🇷🇺 Sputnik Türkiye (Haber)
+            ...
+            ─────────────────────────
+            ⏸ Duraklat / ▶ Devam
+            ⏹ Durdur
+            ─────────────────────────
+            📺 Pencereyi Göster
+            ❌ Çıkış
+        """
+
+        MENU_IFACE = "com.canonical.dbusmenu"
+        PROPS_IFACE = "org.freedesktop.DBus.Properties"
+
+        # Sabit menü öğe ID'leri
+        _ROOT_ID = 0
+        _HEADER_ID = 1
+        _SEP1_ID = 2
+        _STATION_BASE_ID = 100  # İstasyonlar: 100, 101, 102, ...
+        _SEP2_ID = 50
+        _PLAY_PAUSE_ID = 51
+        _STOP_ID = 52
+        _SEP3_ID = 53
+        _SHOW_WINDOW_ID = 54
+        _QUIT_ID = 55
+
+        def __init__(self, player: GStreamerPlayer, app, bus: dbus.SessionBus):
+            super().__init__(bus, "/DBusMenu")
+            self._player = player
+            self._app = app
+            self._revision = dbus.UInt32(1)
+
+        def _build_layout(self, parent_id, depth, props):
+            """Menü ağacını oluşturur. parent_id=0 root."""
+            if parent_id != self._ROOT_ID:
+                # Alt menü yok — sadece root düzeyinde öğeler var
+                return dbus.Struct(
+                    (self._revision,
+                     dbus.Struct(
+                         (dbus.Int32(parent_id),
+                          dbus.Dictionary({}, signature="sv"),
+                          dbus.Array([], signature="v")),
+                         signature=None)),
+                    signature=None,
+                )
+
+            children = []
+
+            # ── Başlık ──
+            current = self._player.current_station
+            if current:
+                state_text = "⏸ Duraklatıldı" if self._player.is_paused else "🎵 Çalıyor"
+                header_label = f"{state_text} — {current.title}"
+            else:
+                header_label = "Radyola — İnternet Radyo"
+            children.append(self._make_item(
+                self._HEADER_ID,
+                {"label": header_label, "enabled": False},
+            ))
+
+            # ── Ayırıcı 1 ──
+            children.append(self._make_item(
+                self._SEP1_ID,
+                {"type": "separator"},
+            ))
+
+            # ── Radyo İstasyonları ──
+            for i, station in enumerate(STATIONS):
+                item_id = self._STATION_BASE_ID + i
+                label = f"{station.flag}  {station.title}"
+                if station.genre:
+                    label += f"  ({station.genre})"
+
+                props_dict = {"label": label, "enabled": True}
+
+                # Aktif istasyonu işaretle
+                if current and current.title == station.title:
+                    props_dict["toggle-type"] = "radio"
+                    props_dict["toggle-state"] = dbus.Int32(1)
+                else:
+                    props_dict["toggle-type"] = "radio"
+                    props_dict["toggle-state"] = dbus.Int32(0)
+
+                children.append(self._make_item(item_id, props_dict))
+
+            # ── Ayırıcı 2 ──
+            children.append(self._make_item(
+                self._SEP2_ID,
+                {"type": "separator"},
+            ))
+
+            # ── Oynatma Kontrolleri ──
+            if self._player.is_playing:
+                pp_label = "⏸  Duraklat"
+            elif self._player.is_paused:
+                pp_label = "▶  Devam"
+            else:
+                pp_label = "▶  Çal"
+            children.append(self._make_item(
+                self._PLAY_PAUSE_ID,
+                {"label": pp_label, "enabled": bool(current)},
+            ))
+
+            children.append(self._make_item(
+                self._STOP_ID,
+                {"label": "⏹  Durdur",
+                 "enabled": bool(current)},
+            ))
+
+            # ── Ayırıcı 3 ──
+            children.append(self._make_item(
+                self._SEP3_ID,
+                {"type": "separator"},
+            ))
+
+            # ── Pencere Göster ──
+            children.append(self._make_item(
+                self._SHOW_WINDOW_ID,
+                {"label": "📺  Pencereyi Göster", "enabled": True},
+            ))
+
+            # ── Çıkış ──
+            children.append(self._make_item(
+                self._QUIT_ID,
+                {"label": "❌  Çıkış", "enabled": True},
+            ))
+
+            root_item = dbus.Struct(
+                (dbus.Int32(self._ROOT_ID),
+                 dbus.Dictionary(
+                     {"children-display": "submenu"},
+                     signature="sv",
+                 ),
+                 dbus.Array(children, signature="v")),
+                signature=None,
+            )
+
+            return dbus.Struct(
+                (self._revision, root_item),
+                signature=None,
+            )
+
+        @staticmethod
+        def _make_item(item_id, props):
+            """Tek bir menü öğesi oluşturur (çocuksuz)."""
+            d = dbus.Dictionary({}, signature="sv")
+            for k, v in props.items():
+                if isinstance(v, bool):
+                    d[k] = dbus.Boolean(v)
+                elif isinstance(v, int) and not isinstance(v, bool):
+                    d[k] = dbus.Int32(v)
+                else:
+                    d[k] = dbus.String(str(v))
+            return dbus.Struct(
+                (dbus.Int32(item_id), d, dbus.Array([], signature="v")),
+                signature=None,
+            )
+
+        # ── com.canonical.dbusmenu Metodları ──
+
+        @dbus.service.method(MENU_IFACE, in_signature="iias", out_signature="u(ia{sv}av)")
+        def GetLayout(self, parent_id, recursion_depth, property_names):
+            return self._build_layout(parent_id, recursion_depth, property_names)
+
+        @dbus.service.method(MENU_IFACE, in_signature="aias", out_signature="a(ia{sv})")
+        def GetGroupProperties(self, ids, property_names):
+            result = dbus.Array([], signature="(ia{sv})")
+            return result
+
+        @dbus.service.method(MENU_IFACE, in_signature="i", out_signature="b")
+        def AboutToShow(self, item_id):
+            # Menü her açıldığında layout'u yenile
+            self._revision = dbus.UInt32(self._revision + 1)
+            return True  # needs_update = True
+
+        @dbus.service.method(MENU_IFACE, in_signature="isvu", out_signature="")
+        def Event(self, item_id, event_id, data, timestamp):
+            """Menü öğesine tıklandığında çağrılır."""
+            if event_id != "clicked":
+                return
+
+            # İstasyon seçimi
+            if self._STATION_BASE_ID <= item_id < self._STATION_BASE_ID + len(STATIONS):
+                station_idx = item_id - self._STATION_BASE_ID
+                station = STATIONS[station_idx]
+                GLib.idle_add(self._player.toggle, station)
+                self._notify_layout_update()
+                # Penceredeki UI'yi de güncelle
+                if self._app and self._app._window:
+                    GLib.idle_add(self._app._window._update_ui)
+                return
+
+            # Play/Pause
+            if item_id == self._PLAY_PAUSE_ID:
+                if self._player.is_playing:
+                    GLib.idle_add(self._player.pause)
+                elif self._player.current_station:
+                    GLib.idle_add(self._player.resume)
+                self._notify_layout_update()
+                return
+
+            # Durdur
+            if item_id == self._STOP_ID:
+                GLib.idle_add(self._player.stop)
+                self._notify_layout_update()
+                if self._app and self._app._window:
+                    GLib.idle_add(self._app._window._update_ui)
+                return
+
+            # Pencereyi Göster
+            if item_id == self._SHOW_WINDOW_ID:
+                if self._app and self._app._window:
+                    GLib.idle_add(self._app._window.present)
+                return
+
+            # Çıkış
+            if item_id == self._QUIT_ID:
+                if self._app:
+                    GLib.idle_add(self._app.quit)
+                return
+
+        @dbus.service.method(MENU_IFACE, in_signature="ai", out_signature="ai")
+        def AboutToShowGroup(self, ids):
+            self._revision = dbus.UInt32(self._revision + 1)
+            return dbus.Array(ids, signature="i")
+
+        @dbus.service.method(MENU_IFACE, in_signature="a(isvu)", out_signature="ai")
+        def EventGroup(self, events):
+            id_errors = dbus.Array([], signature="i")
+            for item_id, event_id, data, timestamp in events:
+                self.Event(item_id, event_id, data, timestamp)
+            return id_errors
+
+        # ── org.freedesktop.DBus.Properties ──
+
+        @dbus.service.method(PROPS_IFACE, in_signature="ss", out_signature="v")
+        def Get(self, interface, prop):
+            return self.GetAll(interface).get(prop, "")
+
+        @dbus.service.method(PROPS_IFACE, in_signature="s", out_signature="a{sv}")
+        def GetAll(self, interface):
+            if interface == self.MENU_IFACE:
+                return {
+                    "Version": dbus.UInt32(3),
+                    "TextDirection": "ltr",
+                    "Status": "normal",
+                    "IconThemePath": dbus.Array([], signature="s"),
+                }
+            return {}
+
+        @dbus.service.method(PROPS_IFACE, in_signature="ssv")
+        def Set(self, interface, prop, value):
+            pass
+
+        # ── Sinyaller ──
+
+        @dbus.service.signal(MENU_IFACE, signature="u(ia{sv}av)")
+        def LayoutUpdated(self, revision, layout):
+            pass
+
+        @dbus.service.signal(MENU_IFACE, signature="a(ia{sv})a(ias)")
+        def ItemsPropertiesUpdated(self, updated_props, removed_props):
+            pass
+
+        def _notify_layout_update(self):
+            """Menü yapısının değiştiğini tray host'a bildirir."""
+            self._revision = dbus.UInt32(self._revision + 1)
+            try:
+                self.LayoutUpdated(
+                    self._revision,
+                    dbus.Struct(
+                        (dbus.Int32(0),
+                         dbus.Dictionary({}, signature="sv"),
+                         dbus.Array([], signature="v")),
+                        signature=None,
+                    ),
+                )
+            except Exception:
+                pass
+
+        def cleanup(self) -> None:
+            pass
+
+
+# ──────────────────────────────────────────────
 # StatusNotifierItem (System Tray) D-Bus
 # ──────────────────────────────────────────────
 
@@ -514,12 +813,14 @@ if HAS_DBUS:
         GNOME (gnome-shell-extension-appindicator uzantısıyla), KDE Plasma,
         XFCE ve MATE tarafından desteklenir. Tray host yoksa sessizce
         devre dışı kalır.
+
+        ItemIsMenu=True olarak ayarlandığında, tray ikonuna tıklamak
+        doğrudan DBusMenu menüsünü gösterir (pencere açmaz).
         """
 
         SNI_IFACE = "org.kde.StatusNotifierItem"
         SNI_WATCHER = "org.kde.StatusNotifierWatcher"
         PROPS_IFACE = "org.freedesktop.DBus.Properties"
-        MENU_IFACE = "com.canonical.dbusmenu"
 
         _ICON_MAP = {
             "stopped": "audio-x-generic",
@@ -527,12 +828,14 @@ if HAS_DBUS:
             "paused": "media-playback-pause",
         }
 
-        def __init__(self, player: GStreamerPlayer, app, bus: dbus.SessionBus):
+        def __init__(self, player: GStreamerPlayer, app, bus: dbus.SessionBus,
+                     dbus_menu: "DBusMenuService" = None):
             self._obj_path = "/StatusNotifierItem"
             super().__init__(bus, self._obj_path)
             self._player = player
             self._app = app
             self._bus = bus
+            self._dbus_menu = dbus_menu
             self._current_icon = "audio-x-generic"
             self._registered = False
             self._try_register()
@@ -582,8 +885,8 @@ if HAS_DBUS:
                          tooltip_text, ""),
                         signature=None,
                     ),
-                    "ItemIsMenu": False,
-                    "Menu": dbus.ObjectPath("/NO_DBUSMENU"),
+                    "ItemIsMenu": True,
+                    "Menu": dbus.ObjectPath("/DBusMenu"),
                 }
             return {}
 
@@ -591,9 +894,9 @@ if HAS_DBUS:
 
         @dbus.service.method(SNI_IFACE, in_signature="ii")
         def Activate(self, x, y):
-            """Sol tık — pencere göster/gizle."""
-            if self._app and self._app._window:
-                GLib.idle_add(self._app._window.toggle_visibility)
+            """Sol tık — menü gösterilir (ItemIsMenu=True olduğu için
+            tray host bu metodu çağırmak yerine doğrudan DBusMenu'yü kullanır)."""
+            pass
 
         @dbus.service.method(SNI_IFACE, in_signature="ii")
         def SecondaryActivate(self, x, y):
@@ -631,6 +934,9 @@ if HAS_DBUS:
                 if self._registered:
                     self.NewIcon()
                     self.NewToolTip()
+            # Menü içeriğini de güncelle
+            if self._dbus_menu:
+                self._dbus_menu._notify_layout_update()
 
         def cleanup(self) -> None:
             pass
@@ -971,6 +1277,7 @@ class RadyolaApp(Adw.Application):
         self._window: Optional[RadyolaWindow] = None
         self._mpris: Optional[object] = None
         self._tray: Optional[object] = None
+        self._dbus_menu: Optional[object] = None
 
     def do_activate(self) -> None:
         """Uygulama aktifleştiğinde pencereyi oluşturur veya öne getirir."""
@@ -980,7 +1287,7 @@ class RadyolaApp(Adw.Application):
         self._window.present()
 
     def _setup_dbus_services(self) -> None:
-        """MPRIS ve System Tray D-Bus servislerini başlatır."""
+        """MPRIS, DBusMenu ve System Tray D-Bus servislerini başlatır."""
         if not HAS_DBUS or not self._window:
             return
 
@@ -995,23 +1302,32 @@ class RadyolaApp(Adw.Application):
             log.warning(f"MPRIS başlatılamadı: {e}")
             self._mpris = None
 
-        # System Tray ikonu
+        # DBusMenu + System Tray ikonu
         try:
             bus = dbus.SessionBus()
-            self._tray = TrayIndicator(player, self, bus)
+
+            # Önce DBusMenu servisini oluştur (menü içeriği)
+            self._dbus_menu = DBusMenuService(player, self, bus)
+            log.info("DBusMenu servisi başlatıldı")
+
+            # Sonra TrayIndicator'ı oluştur (DBusMenu'ye referans ver)
+            self._tray = TrayIndicator(player, self, bus, self._dbus_menu)
             self._window._tray = self._tray
             if self._tray.is_registered:
-                log.info("System tray ikonu aktif")
+                log.info("System tray ikonu aktif (menülü)")
             else:
                 log.info("System tray ikonu devre dışı (host yok)")
         except Exception as e:
             log.warning(f"System tray başlatılamadı: {e}")
             self._tray = None
+            self._dbus_menu = None
 
     def do_shutdown(self) -> None:
         """Uygulama kapanışında temizlik yapar."""
         if self._mpris:
             self._mpris.cleanup()
+        if self._dbus_menu:
+            self._dbus_menu.cleanup()
         if self._tray:
             self._tray.cleanup()
         if self._window:
