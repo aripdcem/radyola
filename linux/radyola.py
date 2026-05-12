@@ -781,14 +781,26 @@ if HAS_DBUS:
 
         @dbus.service.method(MENU_IFACE, in_signature="i", out_signature="b")
         def AboutToShow(self, item_id):
-            # Menü her açıldığında layout'u yenile
-            self._revision = dbus.UInt32(self._revision + 1)
-            return True  # needs_update = True
+            """Menü açılmadan hemen önce çağrılır.
+
+            Root menü (0) için layout'u güncelle.
+            Alt menüler (ülke menüleri) için güncelleme yapma —
+            aksi halde menü açılıp hemen kapanır.
+            """
+            if item_id == self._ROOT_ID:
+                self._revision = dbus.UInt32(self._revision + 1)
+                return True  # needs_update = True
+            return False  # alt menüler için güncelleme gerekmez
 
         @dbus.service.method(MENU_IFACE, in_signature="isvu", out_signature="")
         def Event(self, item_id, event_id, data, timestamp):
             """Menü öğesine tıklandığında çağrılır."""
             if event_id != "clicked":
+                return
+
+            # Ülke alt menü başlıkları — tıklama eylemi yok, alt menü açılır
+            country_groups = self._get_country_groups()
+            if self._COUNTRY_BASE_ID <= item_id < self._COUNTRY_BASE_ID + len(country_groups):
                 return
 
             # İstasyon seçimi
@@ -833,8 +845,13 @@ if HAS_DBUS:
 
         @dbus.service.method(MENU_IFACE, in_signature="ai", out_signature="ai")
         def AboutToShowGroup(self, ids):
-            self._revision = dbus.UInt32(self._revision + 1)
-            return dbus.Array(ids, signature="i")
+            # Sadece root menü varsa revision artır
+            updated_ids = []
+            for item_id in ids:
+                if item_id == self._ROOT_ID:
+                    self._revision = dbus.UInt32(self._revision + 1)
+                    updated_ids.append(item_id)
+            return dbus.Array(updated_ids, signature="i")
 
         @dbus.service.method(MENU_IFACE, in_signature="a(isvu)", out_signature="ai")
         def EventGroup(self, events):
