@@ -1,6 +1,6 @@
 # Radyola — Linux Native İnternet Radyo Çalar
 
-**Radyola**, macOS [MacTile](../macosx/) uygulamasının Linux native karşılığıdır. GTK4, Libadwaita ve GStreamer kullanarak Debian 13 (Trixie) üzerinde çalışan bir internet radyo çalar uygulamasıdır.
+**Radyola**, macOS [Radyola](../macosx/) uygulamasının Linux native karşılığıdır. GTK4, Libadwaita ve GStreamer kullanarak Debian 13 (Trixie) üzerinde çalışan bir internet radyo çalar uygulamasıdır.
 
 ## Ekran Görünümü
 
@@ -158,7 +158,7 @@ GStreamer `playbin` elemanı kullanılır. Bu, GStreamer'ın en yüksek seviyeli
 
 ## macOS Versiyonuyla Karşılaştırma
 
-| Özellik | macOS (MacTile) | Linux (Radyola) |
+| Özellik | macOS (Radyola) | Linux (Radyola) |
 |---|---|---|
 | **Framework** | SwiftUI | GTK4 + Libadwaita |
 | **Ses** | AVFoundation (AVPlayer) | GStreamer (playbin) |
@@ -175,7 +175,7 @@ GStreamer `playbin` elemanı kullanılır. Bu, GStreamer'ın en yüksek seviyeli
 ## Geliştirme Durumu & Notlar
 
 > [!NOTE]
-> Bu sürüm, macOS MacTile projesinin Linux native karşılığı olarak geliştirilmiştir. Temel radyo çalma işlevselliği çalışır durumdadır ve macOS versiyonuna kıyasla ek özellikler içerir.
+> Bu sürüm, macOS Radyola projesinin Linux native karşılığı olarak geliştirilmiştir. Temel radyo çalma işlevselliği çalışır durumdadır ve macOS versiyonuna kıyasla ek özellikler içerir.
 
 ### ✅ Tamamlanan Özellikler
 - GTK4 + Libadwaita ile modern GNOME native pencere

@@ -11,7 +11,7 @@
 		B25398002A03021500802DDB /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */; };
 		B295EBB42A07B8300040170B /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295EBB32A07B8300040170B /* StreamView.swift */; };
 		B295EBB62A07BA600040170B /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295EBB52A07BA600040170B /* SoundManager.swift */; };
-		B2A073572A02E90B001DCE0D /* MacTileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073562A02E90B001DCE0D /* MacTileApp.swift */; };
+		B2A073572A02E90B001DCE0D /* RadyolaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073562A02E90B001DCE0D /* RadyolaApp.swift */; };
 		B2A073592A02E90B001DCE0D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073582A02E90B001DCE0D /* ContentView.swift */; };
 		B2A0735B2A02E90C001DCE0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2A0735A2A02E90C001DCE0D /* Assets.xcassets */; };
 		B2A0735E2A02E90C001DCE0D /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2A0735D2A02E90C001DCE0D /* Preview Assets.xcassets */; };
@@ -22,12 +22,12 @@
 		B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsView.swift; sourceTree = "<group>"; };
 		B295EBB32A07B8300040170B /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		B295EBB52A07BA600040170B /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
-		B2A073532A02E90B001DCE0D /* MacTile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacTile.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B2A073562A02E90B001DCE0D /* MacTileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTileApp.swift; sourceTree = "<group>"; };
+		B2A073532A02E90B001DCE0D /* Radyola.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Radyola.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B2A073562A02E90B001DCE0D /* RadyolaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadyolaApp.swift; sourceTree = "<group>"; };
 		B2A073582A02E90B001DCE0D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B2A0735A2A02E90C001DCE0D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B2A0735D2A02E90C001DCE0D /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		B2A0735F2A02E90C001DCE0D /* MacTile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MacTile.entitlements; sourceTree = "<group>"; };
+		B2A0735F2A02E90C001DCE0D /* Radyola.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Radyola.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -44,7 +44,7 @@
 		B2A0734A2A02E90B001DCE0D = {
 			isa = PBXGroup;
 			children = (
-				B2A073552A02E90B001DCE0D /* MacTile */,
+				B2A073552A02E90B001DCE0D /* Radyola */,
 				B2A073542A02E90B001DCE0D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,25 +52,25 @@
 		B2A073542A02E90B001DCE0D /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B2A073532A02E90B001DCE0D /* MacTile.app */,
+				B2A073532A02E90B001DCE0D /* Radyola.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		B2A073552A02E90B001DCE0D /* MacTile */ = {
+		B2A073552A02E90B001DCE0D /* Radyola */ = {
 			isa = PBXGroup;
 			children = (
 				B295EBB52A07BA600040170B /* SoundManager.swift */,
-				B2A073562A02E90B001DCE0D /* MacTileApp.swift */,
+				B2A073562A02E90B001DCE0D /* RadyolaApp.swift */,
 				B2A073582A02E90B001DCE0D /* ContentView.swift */,
 				B295EBB32A07B8300040170B /* StreamView.swift */,
 				B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */,
 				B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */,
 				B2A0735A2A02E90C001DCE0D /* Assets.xcassets */,
-				B2A0735F2A02E90C001DCE0D /* MacTile.entitlements */,
+				B2A0735F2A02E90C001DCE0D /* Radyola.entitlements */,
 				B2A0735C2A02E90C001DCE0D /* Preview Content */,
 			);
-			path = MacTile;
+			path = Radyola;
 			sourceTree = "<group>";
 		};
 		B2A0735C2A02E90C001DCE0D /* Preview Content */ = {
@@ -84,9 +84,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B2A073522A02E90B001DCE0D /* MacTile */ = {
+		B2A073522A02E90B001DCE0D /* Radyola */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B2A073622A02E90C001DCE0D /* Build configuration list for PBXNativeTarget "MacTile" */;
+			buildConfigurationList = B2A073622A02E90C001DCE0D /* Build configuration list for PBXNativeTarget "Radyola" */;
 			buildPhases = (
 				B2A0734F2A02E90B001DCE0D /* Sources */,
 				B2A073502A02E90B001DCE0D /* Frameworks */,
@@ -96,9 +96,9 @@
 			);
 			dependencies = (
 			);
-			name = MacTile;
-			productName = MacTile;
-			productReference = B2A073532A02E90B001DCE0D /* MacTile.app */;
+			name = Radyola;
+			productName = Radyola;
+			productReference = B2A073532A02E90B001DCE0D /* Radyola.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -116,7 +116,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B2A0734E2A02E90B001DCE0D /* Build configuration list for PBXProject "MacTile" */;
+			buildConfigurationList = B2A0734E2A02E90B001DCE0D /* Build configuration list for PBXProject "Radyola" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -129,7 +129,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				B2A073522A02E90B001DCE0D /* MacTile */,
+				B2A073522A02E90B001DCE0D /* Radyola */,
 			);
 		};
 /* End PBXProject section */
@@ -152,7 +152,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B2A073592A02E90B001DCE0D /* ContentView.swift in Sources */,
-				B2A073572A02E90B001DCE0D /* MacTileApp.swift in Sources */,
+				B2A073572A02E90B001DCE0D /* RadyolaApp.swift in Sources */,
 				B25397FE2A0301C900802DDB /* GeneralSettingsView.swift in Sources */,
 				B25398002A03021500802DDB /* AdvancedSettingsView.swift in Sources */,
 				B295EBB42A07B8300040170B /* StreamView.swift in Sources */,
@@ -281,11 +281,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = MacTile/MacTile.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Radyola/Radyola.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"MacTile/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"Radyola/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -295,7 +295,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.aripd.MacTile;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aripd.Radyola;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -307,11 +307,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = MacTile/MacTile.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Radyola/Radyola.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"MacTile/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"Radyola/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -321,7 +321,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.aripd.MacTile;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aripd.Radyola;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -331,7 +331,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B2A0734E2A02E90B001DCE0D /* Build configuration list for PBXProject "MacTile" */ = {
+		B2A0734E2A02E90B001DCE0D /* Build configuration list for PBXProject "Radyola" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B2A073602A02E90C001DCE0D /* Debug */,
@@ -340,7 +340,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B2A073622A02E90C001DCE0D /* Build configuration list for PBXNativeTarget "MacTile" */ = {
+		B2A073622A02E90C001DCE0D /* Build configuration list for PBXNativeTarget "Radyola" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B2A073632A02E90C001DCE0D /* Debug */,

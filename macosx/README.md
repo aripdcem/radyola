@@ -1,8 +1,8 @@
-# MacTile — Proje Analizi
+# Radyola — Proje Analizi
 
 ## Genel Bakış
 
-**MacTile**, macOS menü çubuğunda (menu bar) yaşayan, SwiftUI ile geliştirilmiş bir **internet radyo akışı (stream) çalar** uygulamasıdır. Uygulama herhangi bir ana pencereye sahip değildir; bunun yerine macOS menü çubuğundaki yıldız ikonuna tıklandığında açılan küçük bir panel üzerinden çalışır.
+**Radyola**, macOS menü çubuğunda (menu bar) yaşayan, SwiftUI ile geliştirilmiş bir **internet radyo akışı (stream) çalar** uygulamasıdır. Uygulama herhangi bir ana pencereye sahip değildir; bunun yerine macOS menü çubuğundaki yıldız ikonuna tıklandığında açılan küçük bir panel üzerinden çalışır.
 
 | Özellik | Değer |
 |---|---|
@@ -19,7 +19,7 @@
 
 ```mermaid
 graph TD
-    A["MacTileApp<br/>(Uygulama Giriş Noktası)"] --> B["MenuBarExtra<br/>(Menü Çubuğu Paneli)"]
+    A["RadyolaApp<br/>(Uygulama Giriş Noktası)"] --> B["MenuBarExtra<br/>(Menü Çubuğu Paneli)"]
     B --> C["ContentView<br/>(TabView Konteyneri)"]
     C --> D["StreamView<br/>(Radyo Listesi)"]
     C --> E["GeneralSettingsView<br/>(Genel Ayarlar)"]
@@ -35,17 +35,17 @@ graph TD
 ## Dosya Yapısı
 
 ```
-MacTile/
-├── MacTile.xcodeproj/          # Xcode proje dosyaları
-├── MacTile/
-│   ├── MacTileApp.swift         # @main — Uygulama giriş noktası
+Radyola/
+├── Radyola.xcodeproj/          # Xcode proje dosyaları
+├── Radyola/
+│   ├── RadyolaApp.swift         # @main — Uygulama giriş noktası
 │   ├── ContentView.swift        # Ana TabView konteyneri
 │   ├── StreamView.swift         # Radyo akışı listesi + model + row view
 │   ├── HelloView.swift          # Prototip/test görünümü (kullanılmıyor)
 │   ├── SoundManager.swift       # AVPlayer sarmalayıcı ses yöneticisi
 │   ├── GeneralSettingsView.swift # Genel ayarlar formu
 │   ├── AdvancedSettingsView.swift# Gelişmiş ayarlar placeholder'ı
-│   ├── MacTile.entitlements     # Sandbox & ağ erişim hakları
+│   ├── Radyola.entitlements     # Sandbox & ağ erişim hakları
 │   ├── Assets.xcassets/         # Uygulama ikonu & renk setleri
 │   └── Preview Content/        # Xcode önizleme varlıkları
 ├── .gitignore
@@ -56,14 +56,14 @@ MacTile/
 
 ## Bileşen Detayları
 
-### 1. MacTileApp.swift — Uygulama Giriş Noktası
+### 1. RadyolaApp.swift — Uygulama Giriş Noktası
 
-[MacTileApp.swift](file:///srv/codebase/aripd/playground/mactile/macosx/MacTile/MacTileApp.swift)
+[RadyolaApp.swift](file:///srv/codebase/aripd/playground/mactile/macosx/Radyola/RadyolaApp.swift)
 
 ```swift
 @available(macOS 13.0, *)
 @main
-struct MacTileApp: App {
+struct RadyolaApp: App {
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     ...
 }
@@ -82,7 +82,7 @@ struct MacTileApp: App {
 
 ### 2. ContentView.swift — Ana TabView Konteyneri
 
-[ContentView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/MacTile/ContentView.swift)
+[ContentView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/Radyola/ContentView.swift)
 
 Uygulamanın menü panelinde görüntülenen ana görünümdür. Üç sekmeli bir `TabView` barındırır:
 
@@ -99,7 +99,7 @@ Uygulamanın menü panelinde görüntülenen ana görünümdür. Üç sekmeli bi
 
 ### 3. StreamView.swift — Radyo Akışı Modülü
 
-[StreamView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/MacTile/StreamView.swift)
+[StreamView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/Radyola/StreamView.swift)
 
 Bu dosya projenin **çekirdek işlevselliğini** barındırır. Dört ayrı yapıyı içerir:
 
@@ -169,7 +169,7 @@ Her radyo istasyonunu listede gösteren satır bileşeni:
 
 ### 4. SoundManager.swift — Ses Yöneticisi
 
-[SoundManager.swift](file:///srv/codebase/aripd/playground/mactile/macosx/MacTile/SoundManager.swift)
+[SoundManager.swift](file:///srv/codebase/aripd/playground/mactile/macosx/Radyola/SoundManager.swift)
 
 ```swift
 class SoundManager: ObservableObject {
@@ -195,7 +195,7 @@ class SoundManager: ObservableObject {
 
 ### 5. GeneralSettingsView.swift — Genel Ayarlar
 
-[GeneralSettingsView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/MacTile/GeneralSettingsView.swift)
+[GeneralSettingsView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/Radyola/GeneralSettingsView.swift)
 
 İki ayar sunar:
 
@@ -211,7 +211,7 @@ class SoundManager: ObservableObject {
 
 ### 6. AdvancedSettingsView.swift — Gelişmiş Ayarlar
 
-[AdvancedSettingsView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/MacTile/AdvancedSettingsView.swift)
+[AdvancedSettingsView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/Radyola/AdvancedSettingsView.swift)
 
 - Yalnızca bir dünya ikonu (`globe`) ve "Hello, world!" metni gösterir.
 - **Tamamen placeholder** bir görünümdür, işlevsel içerik henüz eklenmemiştir.
@@ -220,7 +220,7 @@ class SoundManager: ObservableObject {
 
 ### 7. HelloView.swift — Test Görünümü
 
-[HelloView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/MacTile/HelloView.swift)
+[HelloView.swift](file:///srv/codebase/aripd/playground/mactile/macosx/Radyola/HelloView.swift)
 
 - "Hello from statusbar" metnini gösteren basit bir test görünümü.
 - Projede **aktif olarak kullanılmamaktadır**.
@@ -228,9 +228,9 @@ class SoundManager: ObservableObject {
 
 ---
 
-### 8. MacTile.entitlements — Uygulama Hakları
+### 8. Radyola.entitlements — Uygulama Hakları
 
-[MacTile.entitlements](file:///srv/codebase/aripd/playground/mactile/macosx/MacTile/MacTile.entitlements)
+[Radyola.entitlements](file:///srv/codebase/aripd/playground/mactile/macosx/Radyola/Radyola.entitlements)
 
 | Hak (Entitlement) | Değer | Açıklama |
 |---|---|---|
@@ -318,7 +318,7 @@ Proje 8 commit ile geliştirilmiştir:
 - **GeneralSettingsView** ayarları (font boyutu, önizleme) hiçbir yere bağlı değil
 - **AdvancedSettingsView** tamamen placeholder
 - **HelloView** kullanılmıyor
-- `MacTileApp.body1` alternatif menü yapısı kullanılmıyor
+- `RadyolaApp.body1` alternatif menü yapısı kullanılmıyor
 
 ### ⚠️ Bilinen Kısıtlamalar
 - Birden fazla istasyona tıklandığında önceki akış durmaz (her satır kendi `SoundManager`'ına sahip)

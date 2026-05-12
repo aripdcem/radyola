@@ -2,14 +2,14 @@ import SwiftUI
 
 @available(macOS 13.0, *)
 @main
-struct MacTileApp: App {
+struct RadyolaApp: App {
     
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     
     @State private var command: String = "a"
            
     var body: some Scene {
-        MenuBarExtra("MacTile",
+        MenuBarExtra("Radyola",
                      systemImage: "star.fill",
                      isInserted: $showMenuBarExtra
         ) {

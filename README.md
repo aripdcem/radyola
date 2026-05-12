@@ -1,10 +1,10 @@
-# MacTile / Radyola
+# Radyola / Radyola
 
 Çoklu platform internet radyo çalar uygulaması.
 
 ## Platformlar
 
-### 🍎 macOS — MacTile
+### 🍎 macOS — Radyola
 
 SwiftUI + AVFoundation tabanlı menü çubuğu radyo çalar.
 

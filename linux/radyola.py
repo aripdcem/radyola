@@ -3,7 +3,7 @@
 """
 Radyola — Linux Native Internet Radyo Çalar
 
-macOS MacTile uygulamasının GTK4/Libadwaita/GStreamer tabanlı
+macOS Radyola uygulamasının GTK4/Libadwaita/GStreamer tabanlı
 Linux native karşılığı. Debian 13 (Trixie) için optimize edilmiştir.
 
 Gereksinimler:
@@ -60,7 +60,7 @@ class RadioStation:
         return flags.get(self.country, "📻")
 
 
-# macOS MacTile projesindeki 18 istasyonun tamamı
+# macOS Radyola projesindeki 18 istasyonun tamamı
 STATIONS: list[RadioStation] = [
     RadioStation("Açık Radyo", "https://stream.34bit.net/ar.mp3", "TR", "Kültür"),
     RadioStation(
@@ -529,7 +529,7 @@ class RadyolaWindow(Adw.ApplicationWindow):
             application_icon="audio-x-generic",
             developer_name="aripd",
             version="1.0.0",
-            comments="macOS MacTile projesinin Linux native karşılığı.\n"
+            comments="macOS Radyola projesinin Linux native karşılığı.\n"
             "GTK4 + Libadwaita + GStreamer tabanlı internet radyo çalar.",
             website="https://github.com/aripd/playground",
             license_type=Gtk.License.MIT_X11,
