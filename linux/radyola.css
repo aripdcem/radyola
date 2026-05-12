@@ -1,0 +1,101 @@
+/* ──────────────────────────────────────────────
+ * Radyola — GTK4 Özel Stiller
+ *
+ * Libadwaita temel stillerini genişleten
+ * uygulama-özel CSS tanımları.
+ * ────────────────────────────────────────────── */
+
+/* ── İstasyon Satırı ── */
+
+.station-row {
+    border-radius: 8px;
+    transition: background-color 200ms ease,
+                box-shadow 200ms ease;
+}
+
+.station-row:hover {
+    background-color: alpha(@accent_bg_color, 0.08);
+}
+
+/* Çalan istasyon */
+.station-row.playing {
+    background-color: alpha(@accent_bg_color, 0.15);
+    box-shadow: inset 3px 0 0 0 @accent_bg_color;
+}
+
+.station-row.paused {
+    background-color: alpha(@warning_bg_color, 0.10);
+    box-shadow: inset 3px 0 0 0 alpha(@warning_bg_color, 0.6);
+}
+
+/* ── İstasyon İkonu ── */
+
+.station-icon {
+    color: @accent_fg_color;
+    opacity: 0.6;
+    transition: opacity 200ms ease,
+                color 200ms ease;
+}
+
+.station-row:hover .station-icon {
+    opacity: 1.0;
+    color: @accent_bg_color;
+}
+
+.station-row.playing .station-icon {
+    opacity: 1.0;
+    color: @accent_bg_color;
+}
+
+.station-row.paused .station-icon {
+    opacity: 0.8;
+    color: @warning_bg_color;
+}
+
+/* ── İstasyon Başlığı ── */
+
+.station-title {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.station-row.playing .station-title {
+    font-weight: 700;
+    color: @accent_bg_color;
+}
+
+/* ── İstasyon Türü ── */
+
+.station-genre {
+    font-size: 11px;
+}
+
+/* ── Durum İkonu (sağ taraf) ── */
+
+.status-icon {
+    transition: opacity 300ms ease;
+}
+
+.station-row.playing .status-icon {
+    color: @accent_bg_color;
+}
+
+/* ── Kontrol Çubuğu ── */
+
+.now-playing-label {
+    font-size: 13px;
+    font-weight: 500;
+    font-style: italic;
+    opacity: 0.85;
+}
+
+.control-button {
+    min-width: 36px;
+    min-height: 36px;
+}
+
+/* ── Genel ── */
+
+.boxed-list {
+    background: transparent;
+}

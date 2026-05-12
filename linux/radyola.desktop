@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Radyola
+GenericName=Internet Radio Player
+Comment=GTK4/Libadwaita tabanlı internet radyo çalar
+Exec=python3 /opt/radyola/radyola.py
+Icon=audio-x-generic
+Terminal=false
+Categories=Audio;Music;Player;GTK;
+Keywords=radio;stream;music;radyo;internet;
+StartupNotify=true
