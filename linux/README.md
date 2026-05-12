@@ -25,6 +25,9 @@
 - ▶️ **Play/Pause/Stop** kontrolleri
 - 🎨 **Libadwaita** ile modern GNOME görünümü (koyu/açık tema uyumlu)
 - 📡 **GStreamer** ile tüm codec desteği (MP3, AAC, HLS/m3u8, PLS)
+- 🎛️ **MPRIS D-Bus** entegrasyonu — media tuşları, GNOME Quick Settings, KDE Plasma widget, kilit ekranı kontrolleri
+- 📌 **System Tray** desteği — StatusNotifierItem protokolü (GNOME uzantısıyla, KDE/XFCE/MATE native)
+- 🔄 **Arka plan çalma** — pencere kapatıldığında radyo çalmaya devam eder
 - ⚡ **Tek dosya** mimarisi — kurulumu ve bakımı kolay
 - 🚨 **Hata yönetimi** — bağlantı sorunlarında kullanıcı bildirimi
 - ℹ️ **Hakkında diyaloğu** — uygulama bilgileri
@@ -37,6 +40,7 @@
 |---|---|---|
 | `python3` | 3.11+ | Python yorumlayıcı |
 | `python3-gi` | 3.42+ | PyGObject (GObject Introspection bağlayıcıları) |
+| `python3-dbus` | 1.3+ | D-Bus Python bağlayıcıları (MPRIS + System Tray) |
 | `gir1.2-gtk-4.0` | 4.8+ | GTK4 GObject Introspection |
 | `gir1.2-adw-1` | 1.2+ | Libadwaita GObject Introspection |
 | `gir1.2-gstreamer-1.0` | 1.20+ | GStreamer GObject Introspection |
@@ -45,15 +49,24 @@
 | `gstreamer1.0-plugins-bad` | 1.20+ | HLS desteği (m3u8) |
 | `gstreamer1.0-plugins-ugly` | 1.20+ | Ek codec'ler |
 
+### İsteğe Bağlı (System Tray)
+
+| Paket | Açıklama |
+|---|---|
+| `gnome-shell-extension-appindicator` | GNOME Shell'de tray ikonu görüntüleme (KDE/XFCE/MATE'de gereksiz) |
+
 ### Kurulum (Debian 13)
 
 Gerekli paketler zaten çoğu Debian 13 GNOME kurulumunda mevcuttur. Eksik olanları yüklemek için:
 
 ```bash
-sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
+sudo apt install python3-gi python3-dbus gir1.2-gtk-4.0 gir1.2-adw-1 \
     gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 \
     gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly
+
+# İsteğe bağlı: GNOME'da system tray ikonu için
+sudo apt install gnome-shell-extension-appindicator
 ```
 
 ## Kullanım
@@ -122,9 +135,11 @@ linux/
 |---|---|
 | `RadioStation` | İstasyon veri modeli (isim, URL, ülke, tür) |
 | `GStreamerPlayer` | GStreamer `playbin` ile ses akışı yönetimi |
+| `MprisService` | MPRIS v2.2 D-Bus arayüzü — masaüstü medya kontrolleri |
+| `TrayIndicator` | StatusNotifierItem D-Bus — system tray ikonu |
 | `StationRow` | Tekil istasyon satırı widget'ı |
 | `RadyolaWindow` | Ana pencere: header bar + kontroller + liste |
-| `RadyolaApp` | Uygulama yaşam döngüsü yönetimi |
+| `RadyolaApp` | Uygulama yaşam döngüsü + D-Bus servis yönetimi |
 
 ### Ses Akışı
 
@@ -162,7 +177,7 @@ GStreamer `playbin` elemanı kullanılır. Bu, GStreamer'ın en yüksek seviyeli
 |---|---|---|
 | **Framework** | SwiftUI | GTK4 + Libadwaita |
 | **Ses** | AVFoundation (AVPlayer) | GStreamer (playbin) |
-| **UI Modeli** | MenuBarExtra (menü çubuğu) | Pencereli uygulama |
+| **UI Modeli** | MenuBarExtra (menü çubuğu) | Pencere + System Tray + MPRIS |
 | **Dil** | Swift | Python 3 |
 | **Mimari** | Çoklu dosya | Tek dosya |
 | **Hata Yönetimi** | ❌ | ✅ |
@@ -171,6 +186,8 @@ GStreamer `playbin` elemanı kullanılır. Bu, GStreamer'ın en yüksek seviyeli
 | **İstasyon Sayısı** | 18 | 18 (aynı) |
 | **Tür Bilgisi** | ❌ | ✅ |
 | **Ülke Bayrağı** | ❌ | ✅ |
+| **Media Tuşları** | ❌ | ✅ (MPRIS) |
+| **Arka Plan Çalma** | ✅ (MenuBarExtra) | ✅ (System Tray + MPRIS) |
 
 ## Geliştirme Durumu & Notlar
 
@@ -187,20 +204,23 @@ GStreamer `playbin` elemanı kullanılır. Bu, GStreamer'ın en yüksek seviyeli
 - Koyu/açık tema otomatik uyumu (Libadwaita)
 - Hakkında diyaloğu
 - Freedesktop `.desktop` dosyası (masaüstü entegrasyonu)
+- MPRIS v2.2 D-Bus entegrasyonu (media tuşları, GNOME/KDE kontrolleri)
+- StatusNotifierItem system tray ikonu (graceful fallback)
+- Arka plan çalma (pencere kapatıldığında radyo devam eder)
 
 ### 🚧 Gelecekte Eklenebilecek Özellikler
 - Volume (ses seviyesi) kontrolü (şu an sistem seviyesinde)
-- System tray / indicator desteği (DE bağımlı)
 - İstasyon ekleme/silme/düzenleme UI'sı
 - İstasyon favorilere ekleme
 - "Now Playing" metadata gösterimi (ICY/Shoutcast stream bilgisi)
 - Klavye kısayolları (play/pause/stop/next)
 - İstasyon arama/filtreleme
+- System tray sağ tık menüsü (DBusMenu protokolü ile istasyon seçimi)
 
 ### ⚠️ Bilinen Kısıtlamalar
 - Tüm istasyonlar hardcoded — harici yapılandırma dosyası kullanılmıyor
 - Bazı PLS/m3u8 formatındaki stream URL'leri doğrudan çalışmayabilir (GStreamer plugin desteğine bağlı)
-- System tray entegrasyonu yok (GNOME bunu kaldırdığı için pencereli uygulama tercih edildi)
+- GNOME'da system tray ikonu için `gnome-shell-extension-appindicator` uzantısı gerekir (KDE/XFCE/MATE'de native çalışır)
 
 ## Lisans
 

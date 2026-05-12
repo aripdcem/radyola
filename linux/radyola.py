@@ -20,6 +20,7 @@ Lisans: MIT
 
 import sys
 import os
+import logging
 from dataclasses import dataclass, field
 from typing import Optional
 from pathlib import Path
@@ -31,6 +32,18 @@ gi.require_version("Adw", "1")
 gi.require_version("Gst", "1.0")
 
 from gi.repository import Gtk, Adw, Gst, GLib, Gio, Pango  # noqa: E402
+
+# D-Bus (MPRIS + System Tray) — opsiyonel, yoksa sessizce devre dışı kalır
+try:
+    import dbus
+    import dbus.service
+    from dbus.mainloop.glib import DBusGMainLoop
+
+    HAS_DBUS = True
+except ImportError:
+    HAS_DBUS = False
+
+log = logging.getLogger("radyola")
 
 
 # ──────────────────────────────────────────────
@@ -308,6 +321,322 @@ class GStreamerPlayer:
 
 
 # ──────────────────────────────────────────────
+# MPRIS v2.2 D-Bus Servisi
+# ──────────────────────────────────────────────
+
+
+if HAS_DBUS:
+
+    class MprisService(dbus.service.Object):
+        """MPRIS v2.2 D-Bus arayüzü — masaüstü medya kontrolleri entegrasyonu.
+
+        GNOME Shell Quick Settings, KDE Plasma widget, klavye media tuşları
+        ve kilit ekranı kontrolleriyle otomatik entegrasyon sağlar.
+        """
+
+        MPRIS_IFACE = "org.mpris.MediaPlayer2"
+        PLAYER_IFACE = "org.mpris.MediaPlayer2.Player"
+        PROPS_IFACE = "org.freedesktop.DBus.Properties"
+        BUS_NAME = "org.mpris.MediaPlayer2.Radyola"
+
+        def __init__(self, player: GStreamerPlayer, app):
+            DBusGMainLoop(set_as_default=True)
+            self._bus = dbus.SessionBus()
+            self._bus_name = dbus.service.BusName(self.BUS_NAME, self._bus)
+            super().__init__(self._bus_name, "/org/mpris/MediaPlayer2")
+            self._player = player
+            self._app = app
+            self._last_status = "Stopped"
+
+        # ── org.freedesktop.DBus.Properties ──
+
+        @dbus.service.method(PROPS_IFACE, in_signature="ss", out_signature="v")
+        def Get(self, interface, prop):
+            return self.GetAll(interface).get(prop, "")
+
+        @dbus.service.method(PROPS_IFACE, in_signature="s", out_signature="a{sv}")
+        def GetAll(self, interface):
+            if interface == self.MPRIS_IFACE:
+                return {
+                    "CanQuit": True,
+                    "CanRaise": True,
+                    "HasTrackList": False,
+                    "Identity": "Radyola",
+                    "DesktopEntry": "radyola",
+                    "SupportedUriSchemes": dbus.Array([], signature="s"),
+                    "SupportedMimeTypes": dbus.Array([], signature="s"),
+                }
+            elif interface == self.PLAYER_IFACE:
+                return {
+                    "PlaybackStatus": self._playback_status(),
+                    "Metadata": dbus.Dictionary(self._metadata(), signature="sv"),
+                    "Rate": 1.0,
+                    "MinimumRate": 1.0,
+                    "MaximumRate": 1.0,
+                    "Volume": 1.0,
+                    "CanControl": True,
+                    "CanPlay": True,
+                    "CanPause": True,
+                    "CanSeek": False,
+                    "CanGoNext": True,
+                    "CanGoPrevious": True,
+                }
+            return {}
+
+        @dbus.service.method(PROPS_IFACE, in_signature="ssv")
+        def Set(self, interface, prop, value):
+            pass  # Read-only properties
+
+        # ── org.mpris.MediaPlayer2 ──
+
+        @dbus.service.method(MPRIS_IFACE)
+        def Raise(self):
+            if self._app and self._app._window:
+                GLib.idle_add(self._app._window.present)
+
+        @dbus.service.method(MPRIS_IFACE)
+        def Quit(self):
+            if self._app:
+                GLib.idle_add(self._app.quit)
+
+        # ── org.mpris.MediaPlayer2.Player ──
+
+        @dbus.service.method(PLAYER_IFACE)
+        def Play(self):
+            if self._player.current_station:
+                GLib.idle_add(self._player.resume)
+            else:
+                GLib.idle_add(self._player.play, STATIONS[0])
+
+        @dbus.service.method(PLAYER_IFACE)
+        def Pause(self):
+            GLib.idle_add(self._player.pause)
+
+        @dbus.service.method(PLAYER_IFACE)
+        def PlayPause(self):
+            if self._player.is_playing:
+                GLib.idle_add(self._player.pause)
+            elif self._player.current_station:
+                GLib.idle_add(self._player.resume)
+            else:
+                GLib.idle_add(self._player.play, STATIONS[0])
+
+        @dbus.service.method(PLAYER_IFACE)
+        def Stop(self):
+            GLib.idle_add(self._player.stop)
+
+        @dbus.service.method(PLAYER_IFACE)
+        def Next(self):
+            self._switch_station(1)
+
+        @dbus.service.method(PLAYER_IFACE)
+        def Previous(self):
+            self._switch_station(-1)
+
+        # ── PropertiesChanged Sinyali ──
+
+        @dbus.service.signal(PROPS_IFACE, signature="sa{sv}as")
+        def PropertiesChanged(self, interface, changed, invalidated):
+            pass
+
+        # ── Yardımcı Metodlar ──
+
+        def _playback_status(self) -> str:
+            if self._player.is_playing:
+                return "Playing"
+            if self._player.is_paused:
+                return "Paused"
+            return "Stopped"
+
+        def _metadata(self) -> dict:
+            station = self._player.current_station
+            if not station:
+                return {
+                    "mpris:trackid": dbus.ObjectPath(
+                        "/org/mpris/MediaPlayer2/NoTrack"
+                    ),
+                }
+            return {
+                "mpris:trackid": dbus.ObjectPath(
+                    "/org/mpris/MediaPlayer2/track/current"
+                ),
+                "xesam:title": station.title,
+                "xesam:artist": dbus.Array(["İnternet Radyo"], signature="s"),
+                "xesam:genre": dbus.Array(
+                    [station.genre] if station.genre else [], signature="s"
+                ),
+                "xesam:comment": dbus.Array(
+                    [f"{station.flag} {station.country}"], signature="s"
+                ),
+            }
+
+        def _switch_station(self, direction: int) -> None:
+            """Sonraki/önceki istasyona geç."""
+            current = self._player.current_station
+            if not current:
+                GLib.idle_add(self._player.play, STATIONS[0])
+                return
+            try:
+                idx = STATIONS.index(current)
+            except ValueError:
+                idx = -1
+            new_idx = (idx + direction) % len(STATIONS)
+            GLib.idle_add(self._player.play, STATIONS[new_idx])
+
+        def emit_state_change(self) -> None:
+            """Oynatıcı durum değişikliğinde çağrılır."""
+            status = self._playback_status()
+            changed = {
+                "PlaybackStatus": status,
+                "Metadata": dbus.Dictionary(self._metadata(), signature="sv"),
+            }
+            self.PropertiesChanged(self.PLAYER_IFACE, changed, [])
+            self._last_status = status
+
+        def cleanup(self) -> None:
+            """D-Bus kaydını temizler."""
+            try:
+                self._bus_name.__del__()
+            except Exception:
+                pass
+
+
+# ──────────────────────────────────────────────
+# StatusNotifierItem (System Tray) D-Bus
+# ──────────────────────────────────────────────
+
+
+if HAS_DBUS:
+
+    class TrayIndicator(dbus.service.Object):
+        """StatusNotifierItem D-Bus protokolü ile system tray ikonu.
+
+        GNOME (gnome-shell-extension-appindicator uzantısıyla), KDE Plasma,
+        XFCE ve MATE tarafından desteklenir. Tray host yoksa sessizce
+        devre dışı kalır.
+        """
+
+        SNI_IFACE = "org.kde.StatusNotifierItem"
+        SNI_WATCHER = "org.kde.StatusNotifierWatcher"
+        PROPS_IFACE = "org.freedesktop.DBus.Properties"
+        MENU_IFACE = "com.canonical.dbusmenu"
+
+        _ICON_MAP = {
+            "stopped": "audio-x-generic",
+            "playing": "media-playback-start",
+            "paused": "media-playback-pause",
+        }
+
+        def __init__(self, player: GStreamerPlayer, app, bus: dbus.SessionBus):
+            self._obj_path = "/StatusNotifierItem"
+            super().__init__(bus, self._obj_path)
+            self._player = player
+            self._app = app
+            self._bus = bus
+            self._current_icon = "audio-x-generic"
+            self._registered = False
+            self._try_register()
+
+        def _try_register(self) -> None:
+            """StatusNotifierWatcher'a kayıt ol."""
+            try:
+                watcher = self._bus.get_object(
+                    self.SNI_WATCHER, "/StatusNotifierWatcher"
+                )
+                watcher_iface = dbus.Interface(watcher, self.SNI_WATCHER)
+                watcher_iface.RegisterStatusNotifierItem(self._obj_path)
+                self._registered = True
+                log.info("System tray: StatusNotifierWatcher'a kayıt olundu")
+            except dbus.DBusException:
+                log.info(
+                    "System tray: StatusNotifierWatcher bulunamadı — "
+                    "tray ikonu devre dışı (GNOME'da gnome-shell-extension-appindicator gerekir)"
+                )
+                self._registered = False
+
+        @property
+        def is_registered(self) -> bool:
+            return self._registered
+
+        # ── org.freedesktop.DBus.Properties ──
+
+        @dbus.service.method(PROPS_IFACE, in_signature="ss", out_signature="v")
+        def Get(self, interface, prop):
+            return self.GetAll(interface).get(prop, "")
+
+        @dbus.service.method(PROPS_IFACE, in_signature="s", out_signature="a{sv}")
+        def GetAll(self, interface):
+            if interface == self.SNI_IFACE:
+                station = self._player.current_station
+                tooltip_text = (
+                    f"Radyola — {station.title}" if station else "Radyola"
+                )
+                return {
+                    "Category": "ApplicationStatus",
+                    "Id": "radyola",
+                    "Title": "Radyola",
+                    "Status": "Active",
+                    "IconName": self._current_icon,
+                    "ToolTip": dbus.Struct(
+                        ("", dbus.Array([], signature="(iiay)"),
+                         tooltip_text, ""),
+                        signature=None,
+                    ),
+                    "ItemIsMenu": False,
+                    "Menu": dbus.ObjectPath("/NO_DBUSMENU"),
+                }
+            return {}
+
+        # ── StatusNotifierItem Aksiyonları ──
+
+        @dbus.service.method(SNI_IFACE, in_signature="ii")
+        def Activate(self, x, y):
+            """Sol tık — pencere göster/gizle."""
+            if self._app and self._app._window:
+                GLib.idle_add(self._app._window.toggle_visibility)
+
+        @dbus.service.method(SNI_IFACE, in_signature="ii")
+        def SecondaryActivate(self, x, y):
+            """Orta tık — play/pause toggle."""
+            if self._player.is_playing:
+                GLib.idle_add(self._player.pause)
+            elif self._player.current_station:
+                GLib.idle_add(self._player.resume)
+
+        @dbus.service.method(SNI_IFACE, in_signature="is")
+        def Scroll(self, delta, orientation):
+            pass  # Volume kontrolü yok
+
+        # ── Sinyaller ──
+
+        @dbus.service.signal(SNI_IFACE)
+        def NewIcon(self):
+            pass
+
+        @dbus.service.signal(SNI_IFACE)
+        def NewToolTip(self):
+            pass
+
+        @dbus.service.signal(SNI_IFACE)
+        def NewStatus(self, status):
+            pass
+
+        # ── Güncelleme ──
+
+        def update_icon(self, state: str) -> None:
+            """Çalma durumuna göre tray ikonunu günceller."""
+            new_icon = self._ICON_MAP.get(state, "audio-x-generic")
+            if new_icon != self._current_icon:
+                self._current_icon = new_icon
+                if self._registered:
+                    self.NewIcon()
+                    self.NewToolTip()
+
+        def cleanup(self) -> None:
+            pass
+
+
+# ──────────────────────────────────────────────
 # İstasyon Satırı Widget'ı
 # ──────────────────────────────────────────────
 
@@ -415,11 +744,18 @@ class RadyolaWindow(Adw.ApplicationWindow):
         self._player.on_error(self._on_player_error)
         self._player.on_state_changed(self._on_player_state_changed)
 
+        # MPRIS + Tray referansları (RadyolaApp tarafından ayarlanır)
+        self._mpris: Optional[object] = None
+        self._tray: Optional[object] = None
+
         # İstasyon satır referansları
         self._station_rows: dict[str, StationRow] = {}
 
         self._build_ui()
         self._load_css()
+
+        # Pencere kapatma davranışı: çalıyorsa arka plana git
+        self.connect("close-request", self._on_close_request)
 
     def _build_ui(self) -> None:
         """UI bileşenlerini oluşturur."""
@@ -548,8 +884,41 @@ class RadyolaWindow(Adw.ApplicationWindow):
         self._update_ui()
 
     def _on_player_state_changed(self, state: str) -> None:
-        """Oynatıcı durumu değiştiğinde UI'ı günceller."""
+        """Oynatıcı durumu değiştiğinde UI + MPRIS + Tray günceller."""
         self._update_ui()
+        # MPRIS durum sinyali
+        if self._mpris:
+            try:
+                self._mpris.emit_state_change()
+            except Exception:
+                pass
+        # Tray ikon güncelleme
+        if self._tray:
+            try:
+                self._tray.update_icon(state)
+            except Exception:
+                pass
+        # Arka plan yaşam döngüsü: çalıyorsa uygulamayı ayakta tut
+        app = self.get_application()
+        if app:
+            if state == "playing":
+                app.hold()
+            elif state == "stopped" and not self.get_visible():
+                app.release()
+
+    def _on_close_request(self, window) -> bool:
+        """Pencere kapatıldığında: çalıyorsa gizle, değilse kapat."""
+        if self._player.is_playing or self._player.is_paused:
+            self.set_visible(False)
+            return True  # Kapanmayı engelle
+        return False  # Normal kapanış
+
+    def toggle_visibility(self) -> None:
+        """Pencereyi göster/gizle toggle."""
+        if self.get_visible():
+            self.set_visible(False)
+        else:
+            self.present()
 
     # ── UI Güncelleme ──
 
@@ -588,7 +957,11 @@ class RadyolaWindow(Adw.ApplicationWindow):
 
 
 class RadyolaApp(Adw.Application):
-    """Radyola GTK4/Libadwaita uygulaması."""
+    """Radyola GTK4/Libadwaita uygulaması.
+
+    MPRIS D-Bus ve StatusNotifierItem (system tray) entegrasyonu ile
+    arka planda çalma desteği sağlar.
+    """
 
     def __init__(self):
         super().__init__(
@@ -596,15 +969,51 @@ class RadyolaApp(Adw.Application):
             flags=Gio.ApplicationFlags.DEFAULT_FLAGS,
         )
         self._window: Optional[RadyolaWindow] = None
+        self._mpris: Optional[object] = None
+        self._tray: Optional[object] = None
 
     def do_activate(self) -> None:
         """Uygulama aktifleştiğinde pencereyi oluşturur veya öne getirir."""
         if not self._window:
             self._window = RadyolaWindow(self)
+            self._setup_dbus_services()
         self._window.present()
+
+    def _setup_dbus_services(self) -> None:
+        """MPRIS ve System Tray D-Bus servislerini başlatır."""
+        if not HAS_DBUS or not self._window:
+            return
+
+        player = self._window._player
+
+        # MPRIS medya kontrolleri
+        try:
+            self._mpris = MprisService(player, self)
+            self._window._mpris = self._mpris
+            log.info("MPRIS D-Bus servisi başlatıldı")
+        except Exception as e:
+            log.warning(f"MPRIS başlatılamadı: {e}")
+            self._mpris = None
+
+        # System Tray ikonu
+        try:
+            bus = dbus.SessionBus()
+            self._tray = TrayIndicator(player, self, bus)
+            self._window._tray = self._tray
+            if self._tray.is_registered:
+                log.info("System tray ikonu aktif")
+            else:
+                log.info("System tray ikonu devre dışı (host yok)")
+        except Exception as e:
+            log.warning(f"System tray başlatılamadı: {e}")
+            self._tray = None
 
     def do_shutdown(self) -> None:
         """Uygulama kapanışında temizlik yapar."""
+        if self._mpris:
+            self._mpris.cleanup()
+        if self._tray:
+            self._tray.cleanup()
         if self._window:
             self._window.cleanup()
         Adw.Application.do_shutdown(self)
