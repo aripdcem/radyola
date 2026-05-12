@@ -913,7 +913,26 @@ if HAS_DBUS:
 
         @dbus.service.method(SNI_IFACE, in_signature="is")
         def Scroll(self, delta, orientation):
-            pass  # Volume kontrolü yok
+            """Fare tekerleği — istasyonlar arası geçiş.
+
+            Yukarı kaydırma: önceki istasyon
+            Aşağı kaydırma: sonraki istasyon
+            """
+            if not STATIONS:
+                return
+            current = self._player.current_station
+            if not current:
+                # Hiçbir şey çalmıyorsa ilk istasyonu başlat
+                GLib.idle_add(self._player.play, STATIONS[0])
+                return
+            try:
+                idx = STATIONS.index(current)
+            except ValueError:
+                idx = 0
+            # delta > 0: yukarı (önceki), delta < 0: aşağı (sonraki)
+            direction = -1 if delta > 0 else 1
+            new_idx = (idx + direction) % len(STATIONS)
+            GLib.idle_add(self._player.play, STATIONS[new_idx])
 
         # ── Sinyaller ──
 
