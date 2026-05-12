@@ -540,6 +540,7 @@ if HAS_DBUS:
         _HEADER_ID = 1
         _SEP1_ID = 2
         _STATION_BASE_ID = 100  # İstasyonlar: 100, 101, 102, ...
+        _COUNTRY_BASE_ID = 200  # Ülke alt menüleri: 200, 201, 202, ...
         _SEP2_ID = 50
         _PLAY_PAUSE_ID = 51
         _STOP_ID = 52
@@ -553,10 +554,68 @@ if HAS_DBUS:
             self._app = app
             self._revision = dbus.UInt32(1)
 
+        def _get_country_groups(self):
+            """İstasyonları ülkeye göre gruplar. Sıralama: orijinal CSV sırası korunur."""
+            from collections import OrderedDict
+            groups = OrderedDict()
+            for i, station in enumerate(STATIONS):
+                # Ülke adını location'dan çıkar
+                if station.location:
+                    parts = station.location.split(",")
+                    country = parts[-1].strip()
+                else:
+                    country = "Diğer"
+                if country not in groups:
+                    groups[country] = []
+                groups[country].append((i, station))
+            return groups
+
         def _build_layout(self, parent_id, depth, props):
-            """Menü ağacını oluşturur. parent_id=0 root."""
+            """Menü ağacını oluşturur.
+
+            parent_id=0: root menü (başlık, ülke alt menüleri, kontroller)
+            parent_id=200+: ülke alt menüsü (o ülkenin istasyonları)
+            """
+            current = self._player.current_station
+            country_groups = self._get_country_groups()
+            country_list = list(country_groups.keys())
+
+            # ── Ülke alt menüsü ──
+            if self._COUNTRY_BASE_ID <= parent_id < self._COUNTRY_BASE_ID + len(country_list):
+                country_idx = parent_id - self._COUNTRY_BASE_ID
+                country_name = country_list[country_idx]
+                station_items = country_groups[country_name]
+
+                children = []
+                for station_idx, station in station_items:
+                    item_id = self._STATION_BASE_ID + station_idx
+                    label = f"{station.flag}  {station.title}"
+                    if station.city:
+                        label += f"  ({station.city})"
+
+                    props_dict = {"label": label, "enabled": True}
+                    if current and current.title == station.title:
+                        props_dict["toggle-type"] = "radio"
+                        props_dict["toggle-state"] = dbus.Int32(1)
+                    else:
+                        props_dict["toggle-type"] = "radio"
+                        props_dict["toggle-state"] = dbus.Int32(0)
+
+                    children.append(self._make_item(item_id, props_dict))
+
+                submenu_item = dbus.Struct(
+                    (dbus.Int32(parent_id),
+                     dbus.Dictionary({"children-display": "submenu"}, signature="sv"),
+                     dbus.Array(children, signature="v")),
+                    signature=None,
+                )
+                return dbus.Struct(
+                    (self._revision, submenu_item),
+                    signature=None,
+                )
+
+            # ── Diğer parent_id'ler (istasyon öğeleri vb.) ──
             if parent_id != self._ROOT_ID:
-                # Alt menü yok — sadece root düzeyinde öğeler var
                 return dbus.Struct(
                     (self._revision,
                      dbus.Struct(
@@ -567,10 +626,10 @@ if HAS_DBUS:
                     signature=None,
                 )
 
+            # ── Root menü ──
             children = []
 
             # ── Başlık ──
-            current = self._player.current_station
             if current:
                 state_text = "⏸ Duraklatıldı" if self._player.is_paused else "🎵 Çalıyor"
                 header_label = f"{state_text} — {current.title}"
@@ -587,24 +646,54 @@ if HAS_DBUS:
                 {"type": "separator"},
             ))
 
-            # ── Radyo İstasyonları ──
-            for i, station in enumerate(STATIONS):
-                item_id = self._STATION_BASE_ID + i
-                label = f"{station.flag}  {station.title}"
-                if station.city:
-                    label += f"  ({station.city})"
+            # ── Ülke Alt Menüleri ──
+            for country_idx, (country_name, station_items) in enumerate(country_groups.items()):
+                country_menu_id = self._COUNTRY_BASE_ID + country_idx
 
-                props_dict = {"label": label, "enabled": True}
+                # Ülke bayrağı ve ismi
+                flag = station_items[0][1].flag if station_items else "📻"
+                count = len(station_items)
 
-                # Aktif istasyonu işaretle
-                if current and current.title == station.title:
-                    props_dict["toggle-type"] = "radio"
-                    props_dict["toggle-state"] = dbus.Int32(1)
+                # Aktif istasyon bu ülkede mi?
+                active_in_group = any(
+                    current and current.title == s.title
+                    for _, s in station_items
+                )
+                if active_in_group:
+                    label = f"{flag}  {country_name}  ▸ 🔊"
                 else:
-                    props_dict["toggle-type"] = "radio"
-                    props_dict["toggle-state"] = dbus.Int32(0)
+                    label = f"{flag}  {country_name}  ({count})"
 
-                children.append(self._make_item(item_id, props_dict))
+                # Alt menü öğesi — çocukları GetLayout(country_menu_id) ile doldurulacak
+                submenu_children = []
+                for station_idx, station in station_items:
+                    item_id = self._STATION_BASE_ID + station_idx
+                    st_label = f"{station.flag}  {station.title}"
+                    if station.city:
+                        st_label += f"  ({station.city})"
+
+                    st_props = {"label": st_label, "enabled": True}
+                    if current and current.title == station.title:
+                        st_props["toggle-type"] = "radio"
+                        st_props["toggle-state"] = dbus.Int32(1)
+                    else:
+                        st_props["toggle-type"] = "radio"
+                        st_props["toggle-state"] = dbus.Int32(0)
+
+                    submenu_children.append(self._make_item(item_id, st_props))
+
+                country_item = dbus.Struct(
+                    (dbus.Int32(country_menu_id),
+                     dbus.Dictionary(
+                         {"label": dbus.String(label),
+                          "children-display": dbus.String("submenu"),
+                          "enabled": dbus.Boolean(True)},
+                         signature="sv",
+                     ),
+                     dbus.Array(submenu_children, signature="v")),
+                    signature=None,
+                )
+                children.append(country_item)
 
             # ── Ayırıcı 2 ──
             children.append(self._make_item(
