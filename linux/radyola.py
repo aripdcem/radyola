@@ -20,7 +20,11 @@ Lisans: MIT
 
 import sys
 import os
+import csv
+import io
 import logging
+import urllib.request
+import urllib.error
 from dataclasses import dataclass, field
 from typing import Optional
 from pathlib import Path
@@ -50,135 +54,138 @@ log = logging.getLogger("radyola")
 # Veri Modeli
 # ──────────────────────────────────────────────
 
+# Google Sheets CSV export URL'si — kanal listesi buradan çekilir
+STATIONS_CSV_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1WetccPDwGuUAqNQzUTVNCKy1k48MDM1bvLnDlfdRhis/export?format=csv"
+)
+
+# Ülke adından bayrak emoji'sine eşleme
+_COUNTRY_FLAGS = {
+    "türkiye": "🇹🇷",
+    "turkey": "🇹🇷",
+    "belgium": "🇧🇪",
+    "united kingdom": "🇬🇧",
+    "uk": "🇬🇧",
+    "greece": "🇬🇷",
+    "russia": "🇷🇺",
+    "spain": "🇪🇸",
+    "united states": "🇺🇸",
+    "usa": "🇺🇸",
+    "france": "🇫🇷",
+    "germany": "🇩🇪",
+    "netherlands": "🇳🇱",
+    "italy": "🇮🇹",
+    "japan": "🇯🇵",
+    "portugal": "🇵🇹",
+    "ireland": "🇮🇪",
+    "canada": "🇨🇦",
+    "australia": "🇦🇺",
+    "austria": "🇦🇹",
+    "switzerland": "🇨🇭",
+    "sweden": "🇸🇪",
+    "norway": "🇳🇴",
+    "denmark": "🇩🇰",
+    "finland": "🇫🇮",
+    "poland": "🇵🇱",
+    "czech republic": "🇨🇿",
+    "hungary": "🇭🇺",
+    "romania": "🇷🇴",
+    "bulgaria": "🇧🇬",
+    "croatia": "🇭🇷",
+    "serbia": "🇷🇸",
+    "brazil": "🇧🇷",
+    "argentina": "🇦🇷",
+    "mexico": "🇲🇽",
+    "india": "🇮🇳",
+    "china": "🇨🇳",
+    "south korea": "🇰🇷",
+}
+
 
 @dataclass
 class RadioStation:
-    """Bir radyo istasyonunu temsil eder."""
+    """Bir radyo istasyonunu temsil eder.
+
+    CSV sütunları: tarih, isim, url, website, konum (şehir, ülke)
+    """
 
     title: str
     url: str
-    country: str = ""
-    genre: str = ""
+    location: str = ""  # "İstanbul, Türkiye" formatında
 
     @property
     def flag(self) -> str:
-        """Ülke bayrağı emoji'si döndürür."""
-        flags = {
-            "TR": "🇹🇷",
-            "BE": "🇧🇪",
-            "GB": "🇬🇧",
-            "GR": "🇬🇷",
-            "RU": "🇷🇺",
-        }
-        return flags.get(self.country, "📻")
+        """Konum string'inden ülke bayrağı emoji'si çıkarır."""
+        if not self.location:
+            return "📻"
+        # "İstanbul, Türkiye" → "Türkiye"
+        parts = self.location.split(",")
+        country_part = parts[-1].strip().lower() if parts else ""
+        return _COUNTRY_FLAGS.get(country_part, "📻")
+
+    @property
+    def city(self) -> str:
+        """Konum string'inden şehir adını çıkarır."""
+        if not self.location:
+            return ""
+        parts = self.location.split(",")
+        return parts[0].strip() if parts else ""
 
 
-# macOS Radyola projesindeki 18 istasyonun tamamı
-STATIONS: list[RadioStation] = [
-    RadioStation("Açık Radyo", "https://stream.34bit.net/ar.mp3", "TR", "Kültür"),
-    RadioStation(
-        "Sputnik Türkiye",
-        "https://nfw.ria.ru/flv/audio.aspx?ID=98318704&type=mp3",
-        "RU",
-        "Haber",
-    ),
-    RadioStation(
-        "ITU Radio Jazz/Blues",
-        "http://160.75.86.29:8088/listen.pls?sid=3",
-        "TR",
-        "Jazz/Blues",
-    ),
-    RadioStation(
-        "ITU Radio Classical",
-        "http://160.75.86.29:8088/listen.pls?sid=5",
-        "TR",
-        "Klasik",
-    ),
-    RadioStation(
-        "MUSIQ3",
-        "https://redbeemedia.streamabc.net/redbm-musiq3-aac-256-1558698",
-        "BE",
-        "Klasik",
-    ),
-    RadioStation(
-        "VRT Klara",
-        "http://icecast-servers.vrtcdn.be/klara-high.mp3",
-        "BE",
-        "Klasik",
-    ),
-    RadioStation(
-        "Viva Brabant Wallon",
-        "https://radio.rtbf.be/viva-bw/aac-128",
-        "BE",
-        "Pop",
-    ),
-    RadioStation(
-        "ITU Radio Rock",
-        "http://160.75.86.29:8088/listen.pls?sid=1",
-        "TR",
-        "Rock",
-    ),
-    RadioStation(
-        "BBC Radio 1",
-        "http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/http-icy-mp3-a/vpid/bbc_radio_one/format/pls.pls",
-        "GB",
-        "Pop",
-    ),
-    RadioStation(
-        "BBC World Service News",
-        "http://open.live.bbc.co.uk/mediaselector/5/select/mediaset/http-icy-mp3-a/format/pls/proto/http/vpid/bbc_world_service.pls",
-        "GB",
-        "Haber",
-    ),
-    RadioStation(
-        "Radyo TRT Haber",
-        "https://nmicenotrt.mediatriple.net/trt_haber.aac",
-        "TR",
-        "Haber",
-    ),
-    RadioStation(
-        "NTV Radyo",
-        "https://dygedge.radyotvonline.net/ntvradyo/playlist.m3u8",
-        "TR",
-        "Haber",
-    ),
-    RadioStation(
-        "HABERTÜRK Radyo",
-        "https://ciner-live.ercdn.net/haberturkradyo/haberturkradyo_1.m3u8",
-        "TR",
-        "Haber",
-    ),
-    RadioStation(
-        "Radio Panik",
-        "https://streaming.domainepublic.net/radiopanik.mp3",
-        "BE",
-        "Alternatif",
-    ),
-    RadioStation(
-        "Radyo Bozcaada",
-        "http://radyobozcaada.canliyayinda.com:4000/stream",
-        "TR",
-        "Pop",
-    ),
-    RadioStation(
-        "Radyo Gökçeada",
-        "https://radyogok.80.yayin.com.tr/stream",
-        "TR",
-        "Pop",
-    ),
-    RadioStation(
-        "Radyo Boğaziçi",
-        "http://nova.radyobogazici.net:7008/listen",
-        "TR",
-        "Pop",
-    ),
-    RadioStation(
-        "Μινόρε Καλλονής",
-        "https://i4.streams.ovh:2200/ssl/minore?mp=/stream",
-        "GR",
-        "Yerel",
-    ),
-]
+def _fetch_stations_from_csv() -> list[RadioStation]:
+    """Google Sheets'ten CSV olarak kanal listesini çeker ve parse eder.
+
+    CSV formatı (başlık satırı yok):
+        tarih, isim, url, website, konum
+    """
+    try:
+        req = urllib.request.Request(
+            STATIONS_CSV_URL,
+            headers={"User-Agent": "Radyola/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            raw = response.read().decode("utf-8")
+
+        stations = []
+        reader = csv.reader(io.StringIO(raw))
+        for row in reader:
+            if len(row) < 3:
+                continue
+            # Sütunlar: tarih(0), isim(1), url(2), website(3), konum(4)
+            title = row[1].strip()
+            url = row[2].strip()
+            location = row[4].strip() if len(row) > 4 else ""
+
+            if not title or not url:
+                continue
+
+            stations.append(RadioStation(title=title, url=url, location=location))
+
+        if stations:
+            log.info(f"Google Sheets'ten {len(stations)} istasyon yüklendi")
+            return stations
+        else:
+            log.warning("Google Sheets'ten istasyon alınamadı — fallback kullanılıyor")
+            return _fallback_stations()
+
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        log.warning(f"Google Sheets'e bağlanılamadı ({e}) — fallback kullanılıyor")
+        return _fallback_stations()
+
+
+def _fallback_stations() -> list[RadioStation]:
+    """İnternet bağlantısı yoksa kullanılacak varsayılan istasyonlar."""
+    return [
+        RadioStation("Açık Radyo", "https://stream.34bit.net/ar.mp3", "İstanbul, Türkiye"),
+        RadioStation("VRT Klara", "http://icecast-servers.vrtcdn.be/klara-high.mp3", "Brussels, Belgium"),
+        RadioStation("BBC Radio 1", "http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/http-icy-mp3-a/vpid/bbc_radio_one/format/pls.pls", "London, United Kingdom"),
+        RadioStation("Radio Panik", "https://streaming.domainepublic.net/radiopanik.mp3", "Brussels, Belgium"),
+    ]
+
+
+# Uygulama başlangıcında istasyonları yükle
+STATIONS: list[RadioStation] = _fetch_stations_from_csv()
 
 
 # ──────────────────────────────────────────────
@@ -462,11 +469,9 @@ if HAS_DBUS:
                 ),
                 "xesam:title": station.title,
                 "xesam:artist": dbus.Array(["İnternet Radyo"], signature="s"),
-                "xesam:genre": dbus.Array(
-                    [station.genre] if station.genre else [], signature="s"
-                ),
+                "xesam:genre": dbus.Array([], signature="s"),
                 "xesam:comment": dbus.Array(
-                    [f"{station.flag} {station.country}"], signature="s"
+                    [f"{station.flag} {station.location}"] if station.location else [], signature="s"
                 ),
             }
 
@@ -586,8 +591,8 @@ if HAS_DBUS:
             for i, station in enumerate(STATIONS):
                 item_id = self._STATION_BASE_ID + i
                 label = f"{station.flag}  {station.title}"
-                if station.genre:
-                    label += f"  ({station.genre})"
+                if station.city:
+                    label += f"  ({station.city})"
 
                 props_dict = {"label": label, "enabled": True}
 
@@ -985,12 +990,12 @@ class StationRow(Gtk.ListBoxRow):
         info_box.append(title_label)
 
         # Alt başlık (tür)
-        if station.genre:
-            genre_label = Gtk.Label(label=station.genre)
-            genre_label.set_xalign(0)
-            genre_label.add_css_class("station-genre")
-            genre_label.add_css_class("dim-label")
-            info_box.append(genre_label)
+        if station.city:
+            city_label = Gtk.Label(label=station.city)
+            city_label.set_xalign(0)
+            city_label.add_css_class("station-genre")
+            city_label.add_css_class("dim-label")
+            info_box.append(city_label)
 
         box.append(info_box)
 
