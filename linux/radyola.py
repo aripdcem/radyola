@@ -22,6 +22,7 @@ import sys
 import os
 import csv
 import io
+import json
 import logging
 import urllib.request
 import urllib.error
@@ -189,6 +190,69 @@ STATIONS: list[RadioStation] = _fetch_stations_from_csv()
 
 
 # ──────────────────────────────────────────────
+# Ayarlar (Settings) Yönetimi
+# ──────────────────────────────────────────────
+
+_CONFIG_DIR = Path.home() / ".config" / "radyola"
+_CONFIG_FILE = _CONFIG_DIR / "settings.json"
+
+_DEFAULT_SETTINGS = {
+    "close_to_tray": True,       # Pencere kapatıldığında system tray'e küçült
+    "autoplay_on_start": False,  # Başlangıçta son istasyonu otomatik çal
+    "remember_station": True,    # Son çalınan istasyonu hatırla
+    "last_station": "",          # Son çalınan istasyonun adı
+    "volume": 100,               # Ses seviyesi (0-100)
+}
+
+
+def load_settings() -> dict:
+    """Ayarları JSON dosyasından yükler. Dosya yoksa varsayılanları döndürür."""
+    try:
+        if _CONFIG_FILE.exists():
+            with open(_CONFIG_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+            # Eksik anahtarları varsayılanlarla tamamla
+            merged = {**_DEFAULT_SETTINGS, **saved}
+            return merged
+    except (json.JSONDecodeError, OSError) as e:
+        log.warning(f"Ayar dosyası okunamadı: {e}")
+    return dict(_DEFAULT_SETTINGS)
+
+
+def save_settings(settings: dict) -> None:
+    """Ayarları JSON dosyasına kaydeder."""
+    try:
+        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        log.warning(f"Ayar dosyası yazılamadı: {e}")
+
+
+# Global ayarlar — uygulama başlangıcında yüklenir
+APP_SETTINGS = load_settings()
+
+
+def _get_country_groups():
+    """İstasyonları ülkeye göre gruplar. Sıralama: orijinal CSV sırası korunur.
+
+    Dönüş: OrderedDict { ülke_adı: [(index, RadioStation), ...] }
+    """
+    from collections import OrderedDict
+    groups = OrderedDict()
+    for i, station in enumerate(STATIONS):
+        if station.location:
+            parts = station.location.split(",")
+            country = parts[-1].strip()
+        else:
+            country = "Diğer"
+        if country not in groups:
+            groups[country] = []
+        groups[country].append((i, station))
+    return groups
+
+
+# ──────────────────────────────────────────────
 # GStreamer Ses Oynatıcı
 # ──────────────────────────────────────────────
 
@@ -210,6 +274,11 @@ class GStreamerPlayer:
         self._current_station: Optional[RadioStation] = None
         self._on_error: Optional[callable] = None
         self._on_state_changed: Optional[callable] = None
+        self._on_volume_changed: Optional[callable] = None
+
+        # Başlangıç ses seviyesini ayarlardan al
+        initial_vol = APP_SETTINGS.get("volume", 100)
+        self._playbin.set_property("volume", max(0.0, min(1.0, initial_vol / 100.0)))
 
         # Bus mesajlarını dinle (hata, durum değişikliği vb.)
         bus = self._playbin.get_bus()
@@ -254,6 +323,25 @@ class GStreamerPlayer:
                 self.resume()
         else:
             self.play(station)
+
+    def set_volume(self, percent: int) -> None:
+        """Ses seviyesini ayarlar (0-100)."""
+        vol = max(0.0, min(1.0, percent / 100.0))
+        self._playbin.set_property("volume", vol)
+        # Ayarlara kaydet
+        APP_SETTINGS["volume"] = percent
+        save_settings(APP_SETTINGS)
+        if self._on_volume_changed:
+            GLib.idle_add(self._on_volume_changed, percent)
+
+    @property
+    def volume(self) -> int:
+        """Ses seviyesini yüzde olarak döndürür (0-100)."""
+        return int(round(self._playbin.get_property("volume") * 100))
+
+    def on_volume_changed(self, callback: callable) -> None:
+        """Ses değişikliği callback'i. callback(percent: int)"""
+        self._on_volume_changed = callback
 
     # ── Durum Sorguları ──
 
@@ -545,8 +633,28 @@ if HAS_DBUS:
         _PLAY_PAUSE_ID = 51
         _STOP_ID = 52
         _SEP3_ID = 53
+        _VOLUME_MENU_ID = 70     # Ses seviyesi alt menüsü
+        _VOLUME_0_ID = 71        # Sessiz
+        _VOLUME_25_ID = 72
+        _VOLUME_50_ID = 73
+        _VOLUME_75_ID = 74
+        _VOLUME_100_ID = 75
+        _SETTINGS_MENU_ID = 60   # Ayarlar alt menüsü
+        _SETTINGS_CLOSE_TRAY_ID = 61
+        _SETTINGS_AUTOPLAY_ID = 62
+        _SETTINGS_REMEMBER_ID = 63
+        _SEP4_ID = 64
         _SHOW_WINDOW_ID = 54
         _QUIT_ID = 55
+
+        # Ses seviyesi presetleri: (ID, etiket, yüzde)
+        _VOLUME_PRESETS = [
+            (71, "🔇  Sessiz", 0),
+            (72, "🔈  %25", 25),
+            (73, "🔉  %50", 50),
+            (74, "🔉  %75", 75),
+            (75, "🔊  %100", 100),
+        ]
 
         def __init__(self, player: GStreamerPlayer, app, bus: dbus.SessionBus):
             super().__init__(bus, "/DBusMenu")
@@ -555,30 +663,86 @@ if HAS_DBUS:
             self._revision = dbus.UInt32(1)
 
         def _get_country_groups(self):
-            """İstasyonları ülkeye göre gruplar. Sıralama: orijinal CSV sırası korunur."""
-            from collections import OrderedDict
-            groups = OrderedDict()
-            for i, station in enumerate(STATIONS):
-                # Ülke adını location'dan çıkar
-                if station.location:
-                    parts = station.location.split(",")
-                    country = parts[-1].strip()
-                else:
-                    country = "Diğer"
-                if country not in groups:
-                    groups[country] = []
-                groups[country].append((i, station))
-            return groups
+            """İstasyonları ülkeye göre gruplar (modül seviyesi fonksiyona delege)."""
+            return _get_country_groups()
 
         def _build_layout(self, parent_id, depth, props):
             """Menü ağacını oluşturur.
 
             parent_id=0: root menü (başlık, ülke alt menüleri, kontroller)
             parent_id=200+: ülke alt menüsü (o ülkenin istasyonları)
+            parent_id=60: ayarlar alt menüsü
             """
             current = self._player.current_station
             country_groups = self._get_country_groups()
             country_list = list(country_groups.keys())
+
+            # ── Ses seviyesi alt menüsü ──
+            if parent_id == self._VOLUME_MENU_ID:
+                current_vol = self._player.volume
+                children = []
+                for vid, vlabel, vpercent in self._VOLUME_PRESETS:
+                    children.append(self._make_item(
+                        vid,
+                        {"label": vlabel,
+                         "toggle-type": "radio",
+                         "toggle-state": dbus.Int32(1 if current_vol == vpercent else 0),
+                         "enabled": True},
+                    ))
+
+                submenu_item = dbus.Struct(
+                    (dbus.Int32(parent_id),
+                     dbus.Dictionary({"children-display": "submenu"}, signature="sv"),
+                     dbus.Array(children, signature="v")),
+                    signature=None,
+                )
+                return dbus.Struct(
+                    (self._revision, submenu_item),
+                    signature=None,
+                )
+
+            # ── Ayarlar alt menüsü ──
+            if parent_id == self._SETTINGS_MENU_ID:
+                settings = APP_SETTINGS
+                children = []
+
+                # Tray'e küçült
+                children.append(self._make_item(
+                    self._SETTINGS_CLOSE_TRAY_ID,
+                    {"label": "Kapatınca tray'e küçült",
+                     "toggle-type": "checkmark",
+                     "toggle-state": dbus.Int32(1 if settings.get("close_to_tray", True) else 0),
+                     "enabled": True},
+                ))
+
+                # Başlangıçta otomatik çal
+                children.append(self._make_item(
+                    self._SETTINGS_AUTOPLAY_ID,
+                    {"label": "Başlangıçta otomatik çal",
+                     "toggle-type": "checkmark",
+                     "toggle-state": dbus.Int32(1 if settings.get("autoplay_on_start", False) else 0),
+                     "enabled": True},
+                ))
+
+                # Son istasyonu hatırla
+                children.append(self._make_item(
+                    self._SETTINGS_REMEMBER_ID,
+                    {"label": "Son istasyonu hatırla",
+                     "toggle-type": "checkmark",
+                     "toggle-state": dbus.Int32(1 if settings.get("remember_station", True) else 0),
+                     "enabled": True},
+                ))
+
+                submenu_item = dbus.Struct(
+                    (dbus.Int32(parent_id),
+                     dbus.Dictionary({"children-display": "submenu"}, signature="sv"),
+                     dbus.Array(children, signature="v")),
+                    signature=None,
+                )
+                return dbus.Struct(
+                    (self._revision, submenu_item),
+                    signature=None,
+                )
 
             # ── Ülke alt menüsü ──
             if self._COUNTRY_BASE_ID <= parent_id < self._COUNTRY_BASE_ID + len(country_list):
@@ -719,11 +883,82 @@ if HAS_DBUS:
                  "enabled": bool(current)},
             ))
 
+            # ── Ses Seviyesi Alt Menüsü ──
+            current_vol = self._player.volume
+            vol_children = []
+            for vid, vlabel, vpercent in self._VOLUME_PRESETS:
+                vol_children.append(self._make_item(
+                    vid,
+                    {"label": vlabel,
+                     "toggle-type": "radio",
+                     "toggle-state": dbus.Int32(1 if current_vol == vpercent else 0),
+                     "enabled": True},
+                ))
+
+            # Ses seviyesi ikonu
+            if current_vol == 0:
+                vol_icon = "🔇"
+            elif current_vol <= 50:
+                vol_icon = "🔉"
+            else:
+                vol_icon = "🔊"
+
+            vol_item = dbus.Struct(
+                (dbus.Int32(self._VOLUME_MENU_ID),
+                 dbus.Dictionary(
+                     {"label": dbus.String(f"{vol_icon}  Ses: %{current_vol}"),
+                      "children-display": dbus.String("submenu"),
+                      "enabled": dbus.Boolean(True)},
+                     signature="sv",
+                 ),
+                 dbus.Array(vol_children, signature="v")),
+                signature=None,
+            )
+            children.append(vol_item)
+
             # ── Ayırıcı 3 ──
             children.append(self._make_item(
                 self._SEP3_ID,
                 {"type": "separator"},
             ))
+
+            # ── Ayarlar Alt Menüsü ──
+            settings = APP_SETTINGS
+            settings_children = []
+            settings_children.append(self._make_item(
+                self._SETTINGS_CLOSE_TRAY_ID,
+                {"label": "Kapatınca tray'e küçült",
+                 "toggle-type": "checkmark",
+                 "toggle-state": dbus.Int32(1 if settings.get("close_to_tray", True) else 0),
+                 "enabled": True},
+            ))
+            settings_children.append(self._make_item(
+                self._SETTINGS_AUTOPLAY_ID,
+                {"label": "Başlangıçta otomatik çal",
+                 "toggle-type": "checkmark",
+                 "toggle-state": dbus.Int32(1 if settings.get("autoplay_on_start", False) else 0),
+                 "enabled": True},
+            ))
+            settings_children.append(self._make_item(
+                self._SETTINGS_REMEMBER_ID,
+                {"label": "Son istasyonu hatırla",
+                 "toggle-type": "checkmark",
+                 "toggle-state": dbus.Int32(1 if settings.get("remember_station", True) else 0),
+                 "enabled": True},
+            ))
+
+            settings_item = dbus.Struct(
+                (dbus.Int32(self._SETTINGS_MENU_ID),
+                 dbus.Dictionary(
+                     {"label": dbus.String("⚙️  Ayarlar"),
+                      "children-display": dbus.String("submenu"),
+                      "enabled": dbus.Boolean(True)},
+                     signature="sv",
+                 ),
+                 dbus.Array(settings_children, signature="v")),
+                signature=None,
+            )
+            children.append(settings_item)
 
             # ── Pencere Göster ──
             children.append(self._make_item(
@@ -829,6 +1064,35 @@ if HAS_DBUS:
                 self._notify_layout_update()
                 if self._app and self._app._window:
                     GLib.idle_add(self._app._window._update_ui)
+                return
+
+            # ── Ses Seviyesi Seçimi ──
+            for vid, vlabel, vpercent in self._VOLUME_PRESETS:
+                if item_id == vid:
+                    GLib.idle_add(self._player.set_volume, vpercent)
+                    self._notify_layout_update()
+                    # Penceredeki slider'ı da güncelle
+                    if self._app and self._app._window:
+                        GLib.idle_add(self._app._window._sync_volume_slider)
+                    return
+
+            # ── Ayarlar Toggle'ları ──
+            if item_id == self._SETTINGS_CLOSE_TRAY_ID:
+                APP_SETTINGS["close_to_tray"] = not APP_SETTINGS.get("close_to_tray", True)
+                save_settings(APP_SETTINGS)
+                self._notify_layout_update()
+                return
+
+            if item_id == self._SETTINGS_AUTOPLAY_ID:
+                APP_SETTINGS["autoplay_on_start"] = not APP_SETTINGS.get("autoplay_on_start", False)
+                save_settings(APP_SETTINGS)
+                self._notify_layout_update()
+                return
+
+            if item_id == self._SETTINGS_REMEMBER_ID:
+                APP_SETTINGS["remember_station"] = not APP_SETTINGS.get("remember_station", True)
+                save_settings(APP_SETTINGS)
+                self._notify_layout_update()
                 return
 
             # Pencereyi Göster
@@ -1207,6 +1471,12 @@ class RadyolaWindow(Adw.ApplicationWindow):
         header.set_title_widget(title_widget)
         self._title_widget = title_widget
 
+        # Ayarlar butonu
+        settings_btn = Gtk.Button(icon_name="emblem-system-symbolic")
+        settings_btn.set_tooltip_text("Ayarlar")
+        settings_btn.connect("clicked", self._on_settings_clicked)
+        header.pack_end(settings_btn)
+
         # Hakkında butonu
         about_btn = Gtk.Button(icon_name="help-about-symbolic")
         about_btn.set_tooltip_text("Hakkında")
@@ -1239,32 +1509,88 @@ class RadyolaWindow(Adw.ApplicationWindow):
         self._now_playing_label.add_css_class("now-playing-label")
         control_box.append(self._now_playing_label)
 
+        # Ses seviyesi kontrolü
+        vol_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+
+        self._vol_icon = Gtk.Image.new_from_icon_name("audio-volume-high-symbolic")
+        self._vol_icon.set_pixel_size(16)
+        vol_box.append(self._vol_icon)
+
+        self._vol_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, 0, 100, 5
+        )
+        self._vol_scale.set_value(APP_SETTINGS.get("volume", 100))
+        self._vol_scale.set_size_request(100, -1)
+        self._vol_scale.set_draw_value(False)
+        self._vol_scale.add_css_class("volume-scale")
+        self._vol_scale.connect("value-changed", self._on_volume_changed)
+        vol_box.append(self._vol_scale)
+
+        self._vol_label = Gtk.Label(label=f"%{APP_SETTINGS.get('volume', 100)}")
+        self._vol_label.add_css_class("dim-label")
+        self._vol_label.set_width_chars(4)
+        vol_box.append(self._vol_label)
+
+        control_box.append(vol_box)
+
         main_box.append(control_box)
 
         # Ayırıcı
         main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
-        # ── İstasyon Listesi ──
+        # ── İstasyon Listesi (Ülkelere Göre Gruplu) ──
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
 
-        self._listbox = Gtk.ListBox()
-        self._listbox.set_selection_mode(Gtk.SelectionMode.NONE)
-        self._listbox.add_css_class("boxed-list")
-        self._listbox.set_margin_start(12)
-        self._listbox.set_margin_end(12)
-        self._listbox.set_margin_top(8)
-        self._listbox.set_margin_bottom(12)
-        self._listbox.connect("row-activated", self._on_row_activated)
+        list_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        list_container.set_margin_start(12)
+        list_container.set_margin_end(12)
+        list_container.set_margin_top(8)
+        list_container.set_margin_bottom(12)
 
-        # İstasyonları ekle
-        for station in STATIONS:
-            row = StationRow(station)
-            self._listbox.append(row)
-            self._station_rows[station.title] = row
+        # İstasyonları ülkeye göre grupla
+        country_groups = _get_country_groups()
 
-        scrolled.set_child(self._listbox)
+        for idx, (country_name, station_items) in enumerate(country_groups.items()):
+            flag = station_items[0][1].flag if station_items else "📻"
+            count = len(station_items)
+
+            # Expander başlık widget'ı
+            header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            header_box.set_hexpand(True)
+
+            header_label = Gtk.Label(label=f"{flag}  {country_name}")
+            header_label.set_xalign(0)
+            header_label.set_hexpand(True)
+            header_label.add_css_class("country-header-label")
+            header_box.append(header_label)
+
+            badge_label = Gtk.Label(label=f"{count}")
+            badge_label.add_css_class("country-badge")
+            header_box.append(badge_label)
+
+            # Expander
+            expander = Gtk.Expander()
+            expander.set_label_widget(header_box)
+            expander.set_expanded(idx == 0)  # İlk ülke açık
+            expander.add_css_class("country-expander")
+
+            # Expander içeriği — istasyon listesi
+            listbox = Gtk.ListBox()
+            listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+            listbox.add_css_class("boxed-list")
+            listbox.connect("row-activated", self._on_row_activated)
+
+            for _, station in station_items:
+                row = StationRow(station)
+                listbox.append(row)
+                self._station_rows[station.title] = row
+
+            expander.set_child(listbox)
+            list_container.append(expander)
+
+        scrolled.set_child(list_container)
         main_box.append(scrolled)
 
         self.set_content(main_box)
@@ -1289,6 +1615,31 @@ class RadyolaWindow(Adw.ApplicationWindow):
         self._player.toggle(station)
         self._update_ui()
 
+    def _on_volume_changed(self, scale: Gtk.Scale) -> None:
+        """Ana pencere ses slider'ı değiştiğinde."""
+        vol = int(scale.get_value())
+        self._player.set_volume(vol)
+        self._vol_label.set_label(f"%{vol}")
+        self._update_vol_icon(vol)
+
+    def _update_vol_icon(self, vol: int) -> None:
+        """Ses seviyesine göre ikonu günceller."""
+        if vol == 0:
+            self._vol_icon.set_from_icon_name("audio-volume-muted-symbolic")
+        elif vol <= 33:
+            self._vol_icon.set_from_icon_name("audio-volume-low-symbolic")
+        elif vol <= 66:
+            self._vol_icon.set_from_icon_name("audio-volume-medium-symbolic")
+        else:
+            self._vol_icon.set_from_icon_name("audio-volume-high-symbolic")
+
+    def _sync_volume_slider(self) -> None:
+        """Tray'den ses değiştiğinde slider'ı senkronize eder."""
+        vol = self._player.volume
+        self._vol_scale.set_value(vol)
+        self._vol_label.set_label(f"%{vol}")
+        self._update_vol_icon(vol)
+
     def _on_stop_clicked(self, button: Gtk.Button) -> None:
         """Durdur butonuna basıldığında."""
         self._player.stop()
@@ -1308,6 +1659,93 @@ class RadyolaWindow(Adw.ApplicationWindow):
             developers=["aripd"],
         )
         about.present(self)
+
+    def _on_settings_clicked(self, button: Gtk.Button) -> None:
+        """Ayarlar diyaloğunu gösterir."""
+        dialog = Adw.PreferencesDialog()
+        dialog.set_title("Ayarlar")
+
+        # ── Genel Ayarlar Sayfası ──
+        page = Adw.PreferencesPage()
+        page.set_title("Genel")
+        page.set_icon_name("emblem-system-symbolic")
+
+        # Davranış grubu
+        behavior_group = Adw.PreferencesGroup()
+        behavior_group.set_title("Davranış")
+        behavior_group.set_description("Uygulama davranış tercihleri")
+
+        # Tray'e küçült
+        close_tray_row = Adw.SwitchRow()
+        close_tray_row.set_title("Kapatınca tray'e küçült")
+        close_tray_row.set_subtitle("Pencere kapatıldığında arka planda çalmaya devam et")
+        close_tray_row.set_active(APP_SETTINGS.get("close_to_tray", True))
+        close_tray_row.connect("notify::active", self._on_setting_close_tray_changed)
+        behavior_group.add(close_tray_row)
+
+        # Başlangıçta otomatik çal
+        autoplay_row = Adw.SwitchRow()
+        autoplay_row.set_title("Başlangıçta otomatik çal")
+        autoplay_row.set_subtitle("Uygulama açıldığında son dinlenen istasyonu otomatik başlat")
+        autoplay_row.set_active(APP_SETTINGS.get("autoplay_on_start", False))
+        autoplay_row.connect("notify::active", self._on_setting_autoplay_changed)
+        behavior_group.add(autoplay_row)
+
+        # Son istasyonu hatırla
+        remember_row = Adw.SwitchRow()
+        remember_row.set_title("Son istasyonu hatırla")
+        remember_row.set_subtitle("Çalınan son istasyonu bir sonraki başlangıç için sakla")
+        remember_row.set_active(APP_SETTINGS.get("remember_station", True))
+        remember_row.connect("notify::active", self._on_setting_remember_changed)
+        behavior_group.add(remember_row)
+
+        page.add(behavior_group)
+
+        # Ses grubu
+        audio_group = Adw.PreferencesGroup()
+        audio_group.set_title("Ses")
+        audio_group.set_description("Ses seviyesi ayarları")
+
+        # Ses seviyesi
+        vol_row = Adw.ActionRow()
+        vol_row.set_title("Ses Seviyesi")
+        vol_row.set_subtitle(f"Şu anki seviye: %{self._player.volume}")
+
+        vol_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, 0, 100, 5
+        )
+        vol_scale.set_value(self._player.volume)
+        vol_scale.set_size_request(200, -1)
+        vol_scale.set_valign(Gtk.Align.CENTER)
+        vol_scale.set_hexpand(True)
+        vol_scale.connect("value-changed", self._on_dialog_volume_changed, vol_row)
+        vol_row.add_suffix(vol_scale)
+
+        audio_group.add(vol_row)
+        page.add(audio_group)
+
+        dialog.add(page)
+        dialog.present(self)
+
+    def _on_setting_close_tray_changed(self, row, param) -> None:
+        APP_SETTINGS["close_to_tray"] = row.get_active()
+        save_settings(APP_SETTINGS)
+
+    def _on_setting_autoplay_changed(self, row, param) -> None:
+        APP_SETTINGS["autoplay_on_start"] = row.get_active()
+        save_settings(APP_SETTINGS)
+
+    def _on_setting_remember_changed(self, row, param) -> None:
+        APP_SETTINGS["remember_station"] = row.get_active()
+        save_settings(APP_SETTINGS)
+
+    def _on_dialog_volume_changed(self, scale: Gtk.Scale, vol_row: Adw.ActionRow) -> None:
+        """Ayarlar diyaloğundaki ses slider'ı değiştiğinde."""
+        vol = int(scale.get_value())
+        self._player.set_volume(vol)
+        vol_row.set_subtitle(f"Şu anki seviye: %{vol}")
+        # Ana penceredeki slider'ı da senkronize et
+        self._sync_volume_slider()
 
     def _on_player_error(self, error_msg: str) -> None:
         """Oynatıcı hatası durumunda kullanıcıyı bilgilendirir."""
@@ -1343,10 +1781,16 @@ class RadyolaWindow(Adw.ApplicationWindow):
                 app.release()
 
     def _on_close_request(self, window) -> bool:
-        """Pencere kapatıldığında: çalıyorsa gizle, değilse kapat."""
-        if self._player.is_playing or self._player.is_paused:
-            self.set_visible(False)
-            return True  # Kapanmayı engelle
+        """Pencere kapatıldığında: ayara göre tray'e küçült veya kapat."""
+        # Son çalınan istasyonu kaydet
+        if APP_SETTINGS.get("remember_station", True) and self._player.current_station:
+            APP_SETTINGS["last_station"] = self._player.current_station.title
+            save_settings(APP_SETTINGS)
+
+        if APP_SETTINGS.get("close_to_tray", True):
+            if self._player.is_playing or self._player.is_paused:
+                self.set_visible(False)
+                return True  # Kapanmayı engelle
         return False  # Normal kapanış
 
     def toggle_visibility(self) -> None:
@@ -1414,6 +1858,7 @@ class RadyolaApp(Adw.Application):
         if not self._window:
             self._window = RadyolaWindow(self)
             self._setup_dbus_services()
+            self._apply_startup_settings()
         self._window.present()
 
     def _setup_dbus_services(self) -> None:
@@ -1452,8 +1897,40 @@ class RadyolaApp(Adw.Application):
             self._tray = None
             self._dbus_menu = None
 
+    def _apply_startup_settings(self) -> None:
+        """Başlangıç ayarlarını uygular (son istasyon, otomatik çalma)."""
+        if not self._window:
+            return
+
+        # Son istasyonu hatırla ve gerekirse otomatik çal
+        last_name = APP_SETTINGS.get("last_station", "")
+        if last_name and APP_SETTINGS.get("remember_station", True):
+            # İstasyonu bul
+            target = None
+            for s in STATIONS:
+                if s.title == last_name:
+                    target = s
+                    break
+
+            if target and APP_SETTINGS.get("autoplay_on_start", False):
+                # Biraz gecikmeyle çal (UI hazır olsun)
+                GLib.timeout_add(500, self._autoplay_station, target)
+
+    def _autoplay_station(self, station: RadioStation) -> bool:
+        """Başlangıçta istasyonu otomatik çalar. GLib.timeout_add callback'i."""
+        if self._window:
+            self._window._player.play(station)
+            self._window._update_ui()
+        return False  # Tekrar çağrılmasın
+
     def do_shutdown(self) -> None:
         """Uygulama kapanışında temizlik yapar."""
+        # Son çalınan istasyonu kaydet
+        if self._window and self._window._player.current_station:
+            if APP_SETTINGS.get("remember_station", True):
+                APP_SETTINGS["last_station"] = self._window._player.current_station.title
+                save_settings(APP_SETTINGS)
+
         if self._mpris:
             self._mpris.cleanup()
         if self._dbus_menu:
