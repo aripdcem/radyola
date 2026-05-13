@@ -36,7 +36,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gst", "1.0")
 
-from gi.repository import Gtk, Adw, Gst, GLib, Gio, Pango  # noqa: E402
+from gi.repository import Gtk, Adw, Gst, GLib, Gio  # noqa: E402
 
 # D-Bus (MPRIS + System Tray) — opsiyonel, yoksa sessizce devre dışı kalır
 try:
@@ -197,7 +197,6 @@ _CONFIG_DIR = Path.home() / ".config" / "radyola"
 _CONFIG_FILE = _CONFIG_DIR / "settings.json"
 
 _DEFAULT_SETTINGS = {
-    "close_to_tray": True,       # Pencere kapatıldığında system tray'e küçült
     "autoplay_on_start": False,  # Başlangıçta son istasyonu otomatik çal
     "remember_station": True,    # Son çalınan istasyonu hatırla
     "last_station": "",          # Son çalınan istasyonun adı
@@ -454,7 +453,7 @@ if HAS_DBUS:
             if interface == self.MPRIS_IFACE:
                 return {
                     "CanQuit": True,
-                    "CanRaise": True,
+                    "CanRaise": False,
                     "HasTrackList": False,
                     "Identity": "Radyola",
                     "DesktopEntry": "radyola",
@@ -486,8 +485,7 @@ if HAS_DBUS:
 
         @dbus.service.method(MPRIS_IFACE)
         def Raise(self):
-            if self._app and self._app._window:
-                GLib.idle_add(self._app._window.present)
+            pass  # Tray-only mod — pencere yok
 
         @dbus.service.method(MPRIS_IFACE)
         def Quit(self):
@@ -640,11 +638,8 @@ if HAS_DBUS:
         _VOLUME_75_ID = 74
         _VOLUME_100_ID = 75
         _SETTINGS_MENU_ID = 60   # Ayarlar alt menüsü
-        _SETTINGS_CLOSE_TRAY_ID = 61
         _SETTINGS_AUTOPLAY_ID = 62
         _SETTINGS_REMEMBER_ID = 63
-        _SEP4_ID = 64
-        _SHOW_WINDOW_ID = 54
         _QUIT_ID = 55
 
         # Ses seviyesi presetleri: (ID, etiket, yüzde)
@@ -705,15 +700,6 @@ if HAS_DBUS:
             if parent_id == self._SETTINGS_MENU_ID:
                 settings = APP_SETTINGS
                 children = []
-
-                # Tray'e küçült
-                children.append(self._make_item(
-                    self._SETTINGS_CLOSE_TRAY_ID,
-                    {"label": "Kapatınca tray'e küçült",
-                     "toggle-type": "checkmark",
-                     "toggle-state": dbus.Int32(1 if settings.get("close_to_tray", True) else 0),
-                     "enabled": True},
-                ))
 
                 # Başlangıçta otomatik çal
                 children.append(self._make_item(
@@ -926,13 +912,6 @@ if HAS_DBUS:
             settings = APP_SETTINGS
             settings_children = []
             settings_children.append(self._make_item(
-                self._SETTINGS_CLOSE_TRAY_ID,
-                {"label": "Kapatınca tray'e küçült",
-                 "toggle-type": "checkmark",
-                 "toggle-state": dbus.Int32(1 if settings.get("close_to_tray", True) else 0),
-                 "enabled": True},
-            ))
-            settings_children.append(self._make_item(
                 self._SETTINGS_AUTOPLAY_ID,
                 {"label": "Başlangıçta otomatik çal",
                  "toggle-type": "checkmark",
@@ -959,12 +938,6 @@ if HAS_DBUS:
                 signature=None,
             )
             children.append(settings_item)
-
-            # ── Pencere Göster ──
-            children.append(self._make_item(
-                self._SHOW_WINDOW_ID,
-                {"label": "📺  Pencereyi Göster", "enabled": True},
-            ))
 
             # ── Çıkış ──
             children.append(self._make_item(
@@ -1044,9 +1017,6 @@ if HAS_DBUS:
                 station = STATIONS[station_idx]
                 GLib.idle_add(self._player.toggle, station)
                 self._notify_layout_update()
-                # Penceredeki UI'yi de güncelle
-                if self._app and self._app._window:
-                    GLib.idle_add(self._app._window._update_ui)
                 return
 
             # Play/Pause
@@ -1062,8 +1032,6 @@ if HAS_DBUS:
             if item_id == self._STOP_ID:
                 GLib.idle_add(self._player.stop)
                 self._notify_layout_update()
-                if self._app and self._app._window:
-                    GLib.idle_add(self._app._window._update_ui)
                 return
 
             # ── Ses Seviyesi Seçimi ──
@@ -1071,18 +1039,9 @@ if HAS_DBUS:
                 if item_id == vid:
                     GLib.idle_add(self._player.set_volume, vpercent)
                     self._notify_layout_update()
-                    # Penceredeki slider'ı da güncelle
-                    if self._app and self._app._window:
-                        GLib.idle_add(self._app._window._sync_volume_slider)
                     return
 
             # ── Ayarlar Toggle'ları ──
-            if item_id == self._SETTINGS_CLOSE_TRAY_ID:
-                APP_SETTINGS["close_to_tray"] = not APP_SETTINGS.get("close_to_tray", True)
-                save_settings(APP_SETTINGS)
-                self._notify_layout_update()
-                return
-
             if item_id == self._SETTINGS_AUTOPLAY_ID:
                 APP_SETTINGS["autoplay_on_start"] = not APP_SETTINGS.get("autoplay_on_start", False)
                 save_settings(APP_SETTINGS)
@@ -1093,12 +1052,6 @@ if HAS_DBUS:
                 APP_SETTINGS["remember_station"] = not APP_SETTINGS.get("remember_station", True)
                 save_settings(APP_SETTINGS)
                 self._notify_layout_update()
-                return
-
-            # Pencereyi Göster
-            if item_id == self._SHOW_WINDOW_ID:
-                if self._app and self._app._window:
-                    GLib.idle_add(self._app._window.present)
                 return
 
             # Çıkış
@@ -1337,510 +1290,15 @@ if HAS_DBUS:
 
 
 # ──────────────────────────────────────────────
-# İstasyon Satırı Widget'ı
-# ──────────────────────────────────────────────
-
-
-class StationRow(Gtk.ListBoxRow):
-    """Tek bir radyo istasyonunu gösteren liste satırı.
-
-    Libadwaita ActionRow kullanarak modern GNOME görünümü sağlar.
-    İstasyon çalarken görsel geri bildirim verir (ikon + CSS sınıfı).
-    """
-
-    def __init__(self, station: RadioStation):
-        super().__init__()
-        self.station = station
-        self._is_active = False
-        self._is_paused = False
-
-        # Ana kutu
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
-
-        # Play/Pause ikonu
-        self._icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
-        self._icon.set_pixel_size(24)
-        self._icon.add_css_class("station-icon")
-        box.append(self._icon)
-
-        # İstasyon bilgileri
-        info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        info_box.set_hexpand(True)
-
-        # Başlık satırı (bayrak + isim)
-        title_label = Gtk.Label(label=f"{station.flag}  {station.title}")
-        title_label.set_xalign(0)
-        title_label.set_ellipsize(Pango.EllipsizeMode.END)
-        title_label.add_css_class("station-title")
-        info_box.append(title_label)
-
-        # Alt başlık (tür)
-        if station.city:
-            city_label = Gtk.Label(label=station.city)
-            city_label.set_xalign(0)
-            city_label.add_css_class("station-genre")
-            city_label.add_css_class("dim-label")
-            info_box.append(city_label)
-
-        box.append(info_box)
-
-        # Durum göstergesi (sağ taraf)
-        self._status_icon = Gtk.Image.new_from_icon_name("audio-volume-muted-symbolic")
-        self._status_icon.set_pixel_size(16)
-        self._status_icon.set_opacity(0)
-        self._status_icon.add_css_class("status-icon")
-        box.append(self._status_icon)
-
-        self.set_child(box)
-        self.add_css_class("station-row")
-
-    def set_active(self, active: bool, paused: bool = False) -> None:
-        """İstasyonun aktif (çalıyor/duraklatılmış) durumunu ayarlar."""
-        self._is_active = active
-        self._is_paused = paused
-
-        if active and not paused:
-            self._icon.set_from_icon_name("media-playback-pause-symbolic")
-            self._status_icon.set_from_icon_name("audio-volume-high-symbolic")
-            self._status_icon.set_opacity(1)
-            self.add_css_class("playing")
-            self.remove_css_class("paused")
-        elif active and paused:
-            self._icon.set_from_icon_name("media-playback-start-symbolic")
-            self._status_icon.set_from_icon_name("media-playback-pause-symbolic")
-            self._status_icon.set_opacity(0.6)
-            self.remove_css_class("playing")
-            self.add_css_class("paused")
-        else:
-            self._icon.set_from_icon_name("media-playback-start-symbolic")
-            self._status_icon.set_opacity(0)
-            self.remove_css_class("playing")
-            self.remove_css_class("paused")
-
-
-# ──────────────────────────────────────────────
-# Ana Pencere
-# ──────────────────────────────────────────────
-
-
-class RadyolaWindow(Adw.ApplicationWindow):
-    """Radyola ana penceresi.
-
-    Libadwaita ApplicationWindow tabanlı, HeaderBar + istasyon listesi +
-    kontrol çubuğu içeren compact bir pencere.
-    """
-
-    def __init__(self, app: Adw.Application):
-        super().__init__(application=app, title="Radyola")
-        self.set_default_size(420, 580)
-        self.set_resizable(True)
-
-        # Oynatıcı
-        self._player = GStreamerPlayer()
-        self._player.on_error(self._on_player_error)
-        self._player.on_state_changed(self._on_player_state_changed)
-
-        # MPRIS + Tray referansları (RadyolaApp tarafından ayarlanır)
-        self._mpris: Optional[object] = None
-        self._tray: Optional[object] = None
-
-        # İstasyon satır referansları
-        self._station_rows: dict[str, StationRow] = {}
-
-        self._build_ui()
-        self._load_css()
-
-        # Pencere kapatma davranışı: çalıyorsa arka plana git
-        self.connect("close-request", self._on_close_request)
-
-    def _build_ui(self) -> None:
-        """UI bileşenlerini oluşturur."""
-
-        # Ana dikey kutu
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-
-        # ── Header Bar ──
-        header = Adw.HeaderBar()
-        header.add_css_class("flat")
-
-        title_widget = Adw.WindowTitle(title="Radyola", subtitle="İnternet Radyo Çalar")
-        header.set_title_widget(title_widget)
-        self._title_widget = title_widget
-
-        # Ayarlar butonu
-        settings_btn = Gtk.Button(icon_name="emblem-system-symbolic")
-        settings_btn.set_tooltip_text("Ayarlar")
-        settings_btn.connect("clicked", self._on_settings_clicked)
-        header.pack_end(settings_btn)
-
-        # Hakkında butonu
-        about_btn = Gtk.Button(icon_name="help-about-symbolic")
-        about_btn.set_tooltip_text("Hakkında")
-        about_btn.connect("clicked", self._on_about_clicked)
-        header.pack_end(about_btn)
-
-        main_box.append(header)
-
-        # ── Kontrol Çubuğu ──
-        control_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        control_box.set_margin_start(16)
-        control_box.set_margin_end(16)
-        control_box.set_margin_top(8)
-        control_box.set_margin_bottom(8)
-        control_box.set_halign(Gtk.Align.CENTER)
-
-        # Durdur butonu
-        self._stop_btn = Gtk.Button(icon_name="media-playback-stop-symbolic")
-        self._stop_btn.set_tooltip_text("Durdur")
-        self._stop_btn.add_css_class("circular")
-        self._stop_btn.add_css_class("control-button")
-        self._stop_btn.set_sensitive(False)
-        self._stop_btn.connect("clicked", self._on_stop_clicked)
-        control_box.append(self._stop_btn)
-
-        # Şu an çalan etiketi
-        self._now_playing_label = Gtk.Label(label="Bir istasyon seçin")
-        self._now_playing_label.set_ellipsize(Pango.EllipsizeMode.END)
-        self._now_playing_label.set_hexpand(True)
-        self._now_playing_label.add_css_class("now-playing-label")
-        control_box.append(self._now_playing_label)
-
-        # Ses seviyesi kontrolü
-        vol_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-
-        self._vol_icon = Gtk.Image.new_from_icon_name("audio-volume-high-symbolic")
-        self._vol_icon.set_pixel_size(16)
-        vol_box.append(self._vol_icon)
-
-        self._vol_scale = Gtk.Scale.new_with_range(
-            Gtk.Orientation.HORIZONTAL, 0, 100, 5
-        )
-        self._vol_scale.set_value(APP_SETTINGS.get("volume", 100))
-        self._vol_scale.set_size_request(100, -1)
-        self._vol_scale.set_draw_value(False)
-        self._vol_scale.add_css_class("volume-scale")
-        self._vol_scale.connect("value-changed", self._on_volume_changed)
-        vol_box.append(self._vol_scale)
-
-        self._vol_label = Gtk.Label(label=f"%{APP_SETTINGS.get('volume', 100)}")
-        self._vol_label.add_css_class("dim-label")
-        self._vol_label.set_width_chars(4)
-        vol_box.append(self._vol_label)
-
-        control_box.append(vol_box)
-
-        main_box.append(control_box)
-
-        # Ayırıcı
-        main_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-
-        # ── İstasyon Listesi (Ülkelere Göre Gruplu) ──
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_vexpand(True)
-        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-
-        list_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        list_container.set_margin_start(12)
-        list_container.set_margin_end(12)
-        list_container.set_margin_top(8)
-        list_container.set_margin_bottom(12)
-
-        # İstasyonları ülkeye göre grupla
-        country_groups = _get_country_groups()
-
-        for idx, (country_name, station_items) in enumerate(country_groups.items()):
-            flag = station_items[0][1].flag if station_items else "📻"
-            count = len(station_items)
-
-            # Expander başlık widget'ı
-            header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            header_box.set_hexpand(True)
-
-            header_label = Gtk.Label(label=f"{flag}  {country_name}")
-            header_label.set_xalign(0)
-            header_label.set_hexpand(True)
-            header_label.add_css_class("country-header-label")
-            header_box.append(header_label)
-
-            badge_label = Gtk.Label(label=f"{count}")
-            badge_label.add_css_class("country-badge")
-            header_box.append(badge_label)
-
-            # Expander
-            expander = Gtk.Expander()
-            expander.set_label_widget(header_box)
-            expander.set_expanded(idx == 0)  # İlk ülke açık
-            expander.add_css_class("country-expander")
-
-            # Expander içeriği — istasyon listesi
-            listbox = Gtk.ListBox()
-            listbox.set_selection_mode(Gtk.SelectionMode.NONE)
-            listbox.add_css_class("boxed-list")
-            listbox.connect("row-activated", self._on_row_activated)
-
-            for _, station in station_items:
-                row = StationRow(station)
-                listbox.append(row)
-                self._station_rows[station.title] = row
-
-            expander.set_child(listbox)
-            list_container.append(expander)
-
-        scrolled.set_child(list_container)
-        main_box.append(scrolled)
-
-        self.set_content(main_box)
-
-    def _load_css(self) -> None:
-        """Özel CSS stillerini yükler."""
-        css_path = Path(__file__).parent / "radyola.css"
-        if css_path.exists():
-            provider = Gtk.CssProvider()
-            provider.load_from_path(str(css_path))
-            Gtk.StyleContext.add_provider_for_display(
-                self.get_display(),
-                provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-            )
-
-    # ── Olay İşleyicileri ──
-
-    def _on_row_activated(self, listbox: Gtk.ListBox, row: StationRow) -> None:
-        """İstasyona tıklandığında çal/duraklat toggle yapar."""
-        station = row.station
-        self._player.toggle(station)
-        self._update_ui()
-
-    def _on_volume_changed(self, scale: Gtk.Scale) -> None:
-        """Ana pencere ses slider'ı değiştiğinde."""
-        vol = int(scale.get_value())
-        self._player.set_volume(vol)
-        self._vol_label.set_label(f"%{vol}")
-        self._update_vol_icon(vol)
-
-    def _update_vol_icon(self, vol: int) -> None:
-        """Ses seviyesine göre ikonu günceller."""
-        if vol == 0:
-            self._vol_icon.set_from_icon_name("audio-volume-muted-symbolic")
-        elif vol <= 33:
-            self._vol_icon.set_from_icon_name("audio-volume-low-symbolic")
-        elif vol <= 66:
-            self._vol_icon.set_from_icon_name("audio-volume-medium-symbolic")
-        else:
-            self._vol_icon.set_from_icon_name("audio-volume-high-symbolic")
-
-    def _sync_volume_slider(self) -> None:
-        """Tray'den ses değiştiğinde slider'ı senkronize eder."""
-        vol = self._player.volume
-        self._vol_scale.set_value(vol)
-        self._vol_label.set_label(f"%{vol}")
-        self._update_vol_icon(vol)
-
-    def _on_stop_clicked(self, button: Gtk.Button) -> None:
-        """Durdur butonuna basıldığında."""
-        self._player.stop()
-        self._update_ui()
-
-    def _on_about_clicked(self, button: Gtk.Button) -> None:
-        """Hakkında diyaloğunu gösterir."""
-        about = Adw.AboutDialog(
-            application_name="Radyola",
-            application_icon="audio-x-generic",
-            developer_name="aripd",
-            version="1.0.0",
-            comments="macOS Radyola projesinin Linux native karşılığı.\n"
-            "GTK4 + Libadwaita + GStreamer tabanlı internet radyo çalar.",
-            website="https://github.com/aripd/playground",
-            license_type=Gtk.License.MIT_X11,
-            developers=["aripd"],
-        )
-        about.present(self)
-
-    def _on_settings_clicked(self, button: Gtk.Button) -> None:
-        """Ayarlar diyaloğunu gösterir."""
-        dialog = Adw.PreferencesDialog()
-        dialog.set_title("Ayarlar")
-
-        # ── Genel Ayarlar Sayfası ──
-        page = Adw.PreferencesPage()
-        page.set_title("Genel")
-        page.set_icon_name("emblem-system-symbolic")
-
-        # Davranış grubu
-        behavior_group = Adw.PreferencesGroup()
-        behavior_group.set_title("Davranış")
-        behavior_group.set_description("Uygulama davranış tercihleri")
-
-        # Tray'e küçült
-        close_tray_row = Adw.SwitchRow()
-        close_tray_row.set_title("Kapatınca tray'e küçült")
-        close_tray_row.set_subtitle("Pencere kapatıldığında arka planda çalmaya devam et")
-        close_tray_row.set_active(APP_SETTINGS.get("close_to_tray", True))
-        close_tray_row.connect("notify::active", self._on_setting_close_tray_changed)
-        behavior_group.add(close_tray_row)
-
-        # Başlangıçta otomatik çal
-        autoplay_row = Adw.SwitchRow()
-        autoplay_row.set_title("Başlangıçta otomatik çal")
-        autoplay_row.set_subtitle("Uygulama açıldığında son dinlenen istasyonu otomatik başlat")
-        autoplay_row.set_active(APP_SETTINGS.get("autoplay_on_start", False))
-        autoplay_row.connect("notify::active", self._on_setting_autoplay_changed)
-        behavior_group.add(autoplay_row)
-
-        # Son istasyonu hatırla
-        remember_row = Adw.SwitchRow()
-        remember_row.set_title("Son istasyonu hatırla")
-        remember_row.set_subtitle("Çalınan son istasyonu bir sonraki başlangıç için sakla")
-        remember_row.set_active(APP_SETTINGS.get("remember_station", True))
-        remember_row.connect("notify::active", self._on_setting_remember_changed)
-        behavior_group.add(remember_row)
-
-        page.add(behavior_group)
-
-        # Ses grubu
-        audio_group = Adw.PreferencesGroup()
-        audio_group.set_title("Ses")
-        audio_group.set_description("Ses seviyesi ayarları")
-
-        # Ses seviyesi
-        vol_row = Adw.ActionRow()
-        vol_row.set_title("Ses Seviyesi")
-        vol_row.set_subtitle(f"Şu anki seviye: %{self._player.volume}")
-
-        vol_scale = Gtk.Scale.new_with_range(
-            Gtk.Orientation.HORIZONTAL, 0, 100, 5
-        )
-        vol_scale.set_value(self._player.volume)
-        vol_scale.set_size_request(200, -1)
-        vol_scale.set_valign(Gtk.Align.CENTER)
-        vol_scale.set_hexpand(True)
-        vol_scale.connect("value-changed", self._on_dialog_volume_changed, vol_row)
-        vol_row.add_suffix(vol_scale)
-
-        audio_group.add(vol_row)
-        page.add(audio_group)
-
-        dialog.add(page)
-        dialog.present(self)
-
-    def _on_setting_close_tray_changed(self, row, param) -> None:
-        APP_SETTINGS["close_to_tray"] = row.get_active()
-        save_settings(APP_SETTINGS)
-
-    def _on_setting_autoplay_changed(self, row, param) -> None:
-        APP_SETTINGS["autoplay_on_start"] = row.get_active()
-        save_settings(APP_SETTINGS)
-
-    def _on_setting_remember_changed(self, row, param) -> None:
-        APP_SETTINGS["remember_station"] = row.get_active()
-        save_settings(APP_SETTINGS)
-
-    def _on_dialog_volume_changed(self, scale: Gtk.Scale, vol_row: Adw.ActionRow) -> None:
-        """Ayarlar diyaloğundaki ses slider'ı değiştiğinde."""
-        vol = int(scale.get_value())
-        self._player.set_volume(vol)
-        vol_row.set_subtitle(f"Şu anki seviye: %{vol}")
-        # Ana penceredeki slider'ı da senkronize et
-        self._sync_volume_slider()
-
-    def _on_player_error(self, error_msg: str) -> None:
-        """Oynatıcı hatası durumunda kullanıcıyı bilgilendirir."""
-        dialog = Adw.AlertDialog(
-            heading="Bağlantı Hatası",
-            body=f"Radyo akışına bağlanılamadı:\n{error_msg}",
-        )
-        dialog.add_response("ok", "Tamam")
-        dialog.present(self)
-        self._update_ui()
-
-    def _on_player_state_changed(self, state: str) -> None:
-        """Oynatıcı durumu değiştiğinde UI + MPRIS + Tray günceller."""
-        self._update_ui()
-        # MPRIS durum sinyali
-        if self._mpris:
-            try:
-                self._mpris.emit_state_change()
-            except Exception:
-                pass
-        # Tray ikon güncelleme
-        if self._tray:
-            try:
-                self._tray.update_icon(state)
-            except Exception:
-                pass
-        # Arka plan yaşam döngüsü: çalıyorsa uygulamayı ayakta tut
-        app = self.get_application()
-        if app:
-            if state == "playing":
-                app.hold()
-            elif state == "stopped" and not self.get_visible():
-                app.release()
-
-    def _on_close_request(self, window) -> bool:
-        """Pencere kapatıldığında: ayara göre tray'e küçült veya kapat."""
-        # Son çalınan istasyonu kaydet
-        if APP_SETTINGS.get("remember_station", True) and self._player.current_station:
-            APP_SETTINGS["last_station"] = self._player.current_station.title
-            save_settings(APP_SETTINGS)
-
-        if APP_SETTINGS.get("close_to_tray", True):
-            if self._player.is_playing or self._player.is_paused:
-                self.set_visible(False)
-                return True  # Kapanmayı engelle
-        return False  # Normal kapanış
-
-    def toggle_visibility(self) -> None:
-        """Pencereyi göster/gizle toggle."""
-        if self.get_visible():
-            self.set_visible(False)
-        else:
-            self.present()
-
-    # ── UI Güncelleme ──
-
-    def _update_ui(self) -> None:
-        """Tüm UI bileşenlerini oynatıcı durumuna göre günceller."""
-        current = self._player.current_station
-        is_playing = self._player.is_playing
-        is_paused = self._player.is_paused
-
-        # İstasyon satırlarını güncelle
-        for title, row in self._station_rows.items():
-            if current and current.title == title:
-                row.set_active(True, paused=is_paused)
-            else:
-                row.set_active(False)
-
-        # Kontrol çubuğunu güncelle
-        if current:
-            state_text = "⏸ Duraklatıldı" if is_paused else "🎵 Çalıyor"
-            self._now_playing_label.set_label(f"{current.flag} {current.title}")
-            self._title_widget.set_subtitle(f"{state_text} — {current.title}")
-            self._stop_btn.set_sensitive(True)
-        else:
-            self._now_playing_label.set_label("Bir istasyon seçin")
-            self._title_widget.set_subtitle("İnternet Radyo Çalar")
-            self._stop_btn.set_sensitive(False)
-
-    def cleanup(self) -> None:
-        """Uygulama kapanışında kaynakları temizler."""
-        self._player.cleanup()
-
-
-# ──────────────────────────────────────────────
-# Uygulama
+# Uygulama (Tray-Only — Pencere Yok)
 # ──────────────────────────────────────────────
 
 
 class RadyolaApp(Adw.Application):
-    """Radyola GTK4/Libadwaita uygulaması.
+    """Radyola — Tray-only internet radyo uygulaması.
 
-    MPRIS D-Bus ve StatusNotifierItem (system tray) entegrasyonu ile
-    arka planda çalma desteği sağlar.
+    Pencere açmaz; sadece system tray ikonu ve MPRIS D-Bus
+    arayüzü üzerinden çalışır.
     """
 
     def __init__(self):
@@ -1848,30 +1306,31 @@ class RadyolaApp(Adw.Application):
             application_id="com.aripd.radyola",
             flags=Gio.ApplicationFlags.DEFAULT_FLAGS,
         )
-        self._window: Optional[RadyolaWindow] = None
+        self._player: Optional[GStreamerPlayer] = None
         self._mpris: Optional[object] = None
         self._tray: Optional[object] = None
         self._dbus_menu: Optional[object] = None
 
     def do_activate(self) -> None:
-        """Uygulama aktifleştiğinde pencereyi oluşturur veya öne getirir."""
-        if not self._window:
-            self._window = RadyolaWindow(self)
+        """Uygulama aktifleştiğinde D-Bus servislerini başlatır (pencere açmaz)."""
+        if not self._player:
+            self._player = GStreamerPlayer()
+            self._player.on_error(self._on_player_error)
+            self._player.on_state_changed(self._on_player_state_changed)
             self._setup_dbus_services()
             self._apply_startup_settings()
-        self._window.present()
+            # Uygulamayı ayakta tut (pencere olmadığı için hold gerekli)
+            self.hold()
+            log.info("Radyola tray-only modda başlatıldı")
 
     def _setup_dbus_services(self) -> None:
         """MPRIS, DBusMenu ve System Tray D-Bus servislerini başlatır."""
-        if not HAS_DBUS or not self._window:
+        if not HAS_DBUS or not self._player:
             return
-
-        player = self._window._player
 
         # MPRIS medya kontrolleri
         try:
-            self._mpris = MprisService(player, self)
-            self._window._mpris = self._mpris
+            self._mpris = MprisService(self._player, self)
             log.info("MPRIS D-Bus servisi başlatıldı")
         except Exception as e:
             log.warning(f"MPRIS başlatılamadı: {e}")
@@ -1880,14 +1339,9 @@ class RadyolaApp(Adw.Application):
         # DBusMenu + System Tray ikonu
         try:
             bus = dbus.SessionBus()
-
-            # Önce DBusMenu servisini oluştur (menü içeriği)
-            self._dbus_menu = DBusMenuService(player, self, bus)
+            self._dbus_menu = DBusMenuService(self._player, self, bus)
             log.info("DBusMenu servisi başlatıldı")
-
-            # Sonra TrayIndicator'ı oluştur (DBusMenu'ye referans ver)
-            self._tray = TrayIndicator(player, self, bus, self._dbus_menu)
-            self._window._tray = self._tray
+            self._tray = TrayIndicator(self._player, self, bus, self._dbus_menu)
             if self._tray.is_registered:
                 log.info("System tray ikonu aktif (menülü)")
             else:
@@ -1899,46 +1353,53 @@ class RadyolaApp(Adw.Application):
 
     def _apply_startup_settings(self) -> None:
         """Başlangıç ayarlarını uygular (son istasyon, otomatik çalma)."""
-        if not self._window:
-            return
-
-        # Son istasyonu hatırla ve gerekirse otomatik çal
         last_name = APP_SETTINGS.get("last_station", "")
         if last_name and APP_SETTINGS.get("remember_station", True):
-            # İstasyonu bul
             target = None
             for s in STATIONS:
                 if s.title == last_name:
                     target = s
                     break
-
             if target and APP_SETTINGS.get("autoplay_on_start", False):
-                # Biraz gecikmeyle çal (UI hazır olsun)
                 GLib.timeout_add(500, self._autoplay_station, target)
 
     def _autoplay_station(self, station: RadioStation) -> bool:
-        """Başlangıçta istasyonu otomatik çalar. GLib.timeout_add callback'i."""
-        if self._window:
-            self._window._player.play(station)
-            self._window._update_ui()
-        return False  # Tekrar çağrılmasın
+        """Başlangıçta istasyonu otomatik çalar."""
+        if self._player:
+            self._player.play(station)
+        return False
+
+    def _on_player_error(self, error_msg: str) -> None:
+        """Oynatıcı hatası durumunda loglar."""
+        log.error(f"Oynatıcı hatası: {error_msg}")
+
+    def _on_player_state_changed(self, state: str) -> None:
+        """Oynatıcı durumu değiştiğinde MPRIS + Tray günceller."""
+        if self._mpris:
+            try:
+                self._mpris.emit_state_change()
+            except Exception:
+                pass
+        if self._tray:
+            try:
+                self._tray.update_icon(state)
+            except Exception:
+                pass
 
     def do_shutdown(self) -> None:
         """Uygulama kapanışında temizlik yapar."""
-        # Son çalınan istasyonu kaydet
-        if self._window and self._window._player.current_station:
+        if self._player and self._player.current_station:
             if APP_SETTINGS.get("remember_station", True):
-                APP_SETTINGS["last_station"] = self._window._player.current_station.title
+                APP_SETTINGS["last_station"] = self._player.current_station.title
                 save_settings(APP_SETTINGS)
-
         if self._mpris:
             self._mpris.cleanup()
         if self._dbus_menu:
             self._dbus_menu.cleanup()
         if self._tray:
             self._tray.cleanup()
-        if self._window:
-            self._window.cleanup()
+        if self._player:
+            self._player.cleanup()
         Adw.Application.do_shutdown(self)
 
 
@@ -1954,3 +1415,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
