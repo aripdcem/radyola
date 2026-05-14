@@ -65,8 +65,10 @@ cd linux/
 ./build-deb.sh
 # → radyola_1.0.0_all.deb oluşturulur
 
-sudo dpkg -i radyola_1.0.0_all.deb
+sudo apt install ./radyola_1.0.0_all.deb
 ```
+
+> `apt install ./` kullanmak bağımlılıkları otomatik çözer (python3-gi, gstreamer vb.).
 
 ### Çalıştırma (Kurulum Sonrası)
 
