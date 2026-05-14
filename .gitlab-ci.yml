@@ -1,0 +1,44 @@
+image: node:22-alpine
+
+# Sadece web/ dizininde değişiklik olduğunda çalıştır
+workflow:
+  rules:
+    - changes:
+        - web/**/*
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+stages:
+  - build
+  - deploy
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - web/node_modules/
+
+build:
+  stage: build
+  script:
+    - cd web
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - web/dist
+      - web/index.html
+      - web/radyola.svg
+      - web/radyola-player.css
+
+pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    - cp web/index.html public/
+    - cp web/radyola.svg public/
+    - cp web/radyola-player.css public/
+    - cp -r web/dist public/
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
