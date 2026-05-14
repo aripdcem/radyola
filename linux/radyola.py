@@ -114,6 +114,7 @@ class RadioStation:
     title: str
     url: str
     location: str = ""  # "İstanbul, Türkiye" formatında
+    genre: str = ""     # "Jazz / Blues", "News", "Classical" vb.
 
     @property
     def flag(self) -> str:
@@ -153,15 +154,16 @@ def _fetch_stations_from_csv() -> list[RadioStation]:
         for row in reader:
             if len(row) < 3:
                 continue
-            # Sütunlar: tarih(0), isim(1), url(2), website(3), konum(4)
+            # Sütunlar: tarih(0), isim(1), url(2), website(3), konum(4), tarz(5)
             title = row[1].strip()
             url = row[2].strip()
             location = row[4].strip() if len(row) > 4 else ""
+            genre = row[5].strip() if len(row) > 5 else ""
 
             if not title or not url:
                 continue
 
-            stations.append(RadioStation(title=title, url=url, location=location))
+            stations.append(RadioStation(title=title, url=url, location=location, genre=genre))
 
         if stations:
             log.info(f"Google Sheets'ten {len(stations)} istasyon yüklendi")
@@ -178,10 +180,10 @@ def _fetch_stations_from_csv() -> list[RadioStation]:
 def _fallback_stations() -> list[RadioStation]:
     """İnternet bağlantısı yoksa kullanılacak varsayılan istasyonlar."""
     return [
-        RadioStation("Açık Radyo", "https://stream.34bit.net/ar.mp3", "İstanbul, Türkiye"),
-        RadioStation("VRT Klara", "http://icecast-servers.vrtcdn.be/klara-high.mp3", "Brussels, Belgium"),
-        RadioStation("BBC Radio 1", "http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/http-icy-mp3-a/vpid/bbc_radio_one/format/pls.pls", "London, United Kingdom"),
-        RadioStation("Radio Panik", "https://streaming.domainepublic.net/radiopanik.mp3", "Brussels, Belgium"),
+        RadioStation("Açık Radyo", "https://stream.34bit.net/ar.mp3", "İstanbul, Türkiye", "Eclectic"),
+        RadioStation("VRT Klara", "http://icecast-servers.vrtcdn.be/klara-high.mp3", "Brussels, Belgium", "Classical"),
+        RadioStation("BBC Radio 1", "http://open.live.bbc.co.uk/mediaselector/5/select/version/2.0/mediaset/http-icy-mp3-a/vpid/bbc_radio_one/format/pls.pls", "London, United Kingdom", "Pop / Dance"),
+        RadioStation("Radio Panik", "https://streaming.domainepublic.net/radiopanik.mp3", "Brussels, Belgium", "Alternative"),
     ]
 
 
@@ -555,7 +557,7 @@ if HAS_DBUS:
                 ),
                 "xesam:title": station.title,
                 "xesam:artist": dbus.Array(["İnternet Radyo"], signature="s"),
-                "xesam:genre": dbus.Array([], signature="s"),
+                "xesam:genre": dbus.Array([station.genre] if station.genre else [], signature="s"),
                 "xesam:comment": dbus.Array(
                     [f"{station.flag} {station.location}"] if station.location else [], signature="s"
                 ),
@@ -740,6 +742,8 @@ if HAS_DBUS:
                 for station_idx, station in station_items:
                     item_id = self._STATION_BASE_ID + station_idx
                     label = f"{station.flag}  {station.title}"
+                    if station.genre:
+                        label += f"  [{station.genre}]"
                     if station.city:
                         label += f"  ({station.city})"
 

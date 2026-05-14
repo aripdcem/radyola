@@ -86,6 +86,7 @@ class RadioStation:
     title: str
     url: str
     location: str = ""
+    genre: str = ""
 
     @property
     def country_code(self) -> str:
@@ -127,9 +128,10 @@ def _fetch_stations_from_csv() -> list[RadioStation]:
             title = row[1].strip()
             url = row[2].strip()
             location = row[4].strip() if len(row) > 4 else ""
+            genre = row[5].strip() if len(row) > 5 else ""
             if not title or not url:
                 continue
-            stations.append(RadioStation(title=title, url=url, location=location))
+            stations.append(RadioStation(title=title, url=url, location=location, genre=genre))
 
         if stations:
             log.info(f"Google Sheets'ten {len(stations)} istasyon yüklendi")
@@ -143,9 +145,9 @@ def _fetch_stations_from_csv() -> list[RadioStation]:
 
 def _fallback_stations() -> list[RadioStation]:
     return [
-        RadioStation("Açık Radyo", "https://stream.34bit.net/ar.mp3", "İstanbul, Türkiye"),
-        RadioStation("VRT Klara", "http://icecast-servers.vrtcdn.be/klara-high.mp3", "Brussels, Belgium"),
-        RadioStation("Radio Panik", "https://streaming.domainepublic.net/radiopanik.mp3", "Brussels, Belgium"),
+        RadioStation("Açık Radyo", "https://stream.34bit.net/ar.mp3", "İstanbul, Türkiye", "Eclectic"),
+        RadioStation("VRT Klara", "http://icecast-servers.vrtcdn.be/klara-high.mp3", "Brussels, Belgium", "Classical"),
+        RadioStation("Radio Panik", "https://streaming.domainepublic.net/radiopanik.mp3", "Brussels, Belgium", "Alternative"),
     ]
 
 
@@ -436,6 +438,8 @@ class RadyolaApp:
             for station_idx, station in station_items:
                 prefix = "> " if current and current.title == station.title else "  "
                 label = f"{prefix}{station.title}"
+                if station.genre:
+                    label += f" [{station.genre}]"
                 if station.city:
                     label += f" ({station.city})"
                 sub_items.append(MenuItem(label, self._make_station_cb(station)))

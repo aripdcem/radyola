@@ -43,6 +43,7 @@ class AripdRadyola extends HTMLElement {
     this._stations = [];
     this._filtered = [];
     this._activeFilter = null;
+    this._activeGenre = null;
     this._currentIdx = -1;
     this._isPlaying = false;
   }
@@ -69,6 +70,7 @@ class AripdRadyola extends HTMLElement {
           <input type="text" placeholder="Search stations..." id="searchInput" aria-label="Search stations">
         </div>
         <div class="locations" id="locationsBar"></div>
+        <div class="locations" id="genresBar"></div>
         <div class="stations" id="stationList">
           <div class="loading"><div class="spinner"></div></div>
         </div>
@@ -103,6 +105,7 @@ class AripdRadyola extends HTMLElement {
     this._audio = document.createElement("audio");
     this._elList = this.shadowRoot.getElementById("stationList");
     this._elLocs = this.shadowRoot.getElementById("locationsBar");
+    this._elGenres = this.shadowRoot.getElementById("genresBar");
     this._elSearch = this.shadowRoot.getElementById("searchInput");
     this._elBar = this.shadowRoot.getElementById("playerBar");
     this._elPName = this.shadowRoot.getElementById("pName");
@@ -134,9 +137,11 @@ class AripdRadyola extends HTMLElement {
         url: r[2],
         website: r[3] || "",
         location: r[4] || "",
+        genre: r[5] || "",
       }));
       this._filtered = [...this._stations];
       this._buildLocations();
+      this._buildGenres();
       this._renderList();
     } catch (err) {
       this._elList.innerHTML = `<div class="empty-state">Failed to load stations. Please try again.</div>`;
@@ -175,6 +180,41 @@ class AripdRadyola extends HTMLElement {
     });
   }
 
+  /* ── genre filter pills ─────────────────────────── */
+  _buildGenres() {
+    const map = {};
+    this._stations.forEach((s) => {
+      if (s.genre) {
+        s.genre.split("/").forEach((g) => {
+          const gt = g.trim();
+          if (gt) map[gt] = (map[gt] || 0) + 1;
+        });
+      }
+    });
+
+    const allPill = el("button", "loc-pill active");
+    allPill.textContent = "All Genres";
+    allPill.addEventListener("click", () => {
+      this._activeGenre = null;
+      this._applyFilters();
+      this._elGenres.querySelectorAll(".loc-pill").forEach((p) => p.classList.remove("active"));
+      allPill.classList.add("active");
+    });
+    this._elGenres.appendChild(allPill);
+
+    Object.keys(map).sort().forEach((genre) => {
+      const pill = el("button", "loc-pill");
+      pill.textContent = genre;
+      pill.addEventListener("click", () => {
+        this._activeGenre = genre;
+        this._applyFilters();
+        this._elGenres.querySelectorAll(".loc-pill").forEach((p) => p.classList.remove("active"));
+        pill.classList.add("active");
+      });
+      this._elGenres.appendChild(pill);
+    });
+  }
+
   _applyFilters() {
     const query = this._elSearch.value.trim();
     let list = [...this._stations];
@@ -183,8 +223,12 @@ class AripdRadyola extends HTMLElement {
       list = list.filter((s) => s.location.includes(this._activeFilter));
     }
 
+    if (this._activeGenre) {
+      list = list.filter((s) => s.genre && s.genre.includes(this._activeGenre));
+    }
+
     if (query.length > 0) {
-      const fuse = new Fuse(list, { keys: ["name", "location"], threshold: 0.35 });
+      const fuse = new Fuse(list, { keys: ["name", "location", "genre"], threshold: 0.35 });
       list = fuse.search(query).map((r) => r.item);
     }
 
@@ -216,7 +260,10 @@ class AripdRadyola extends HTMLElement {
         </div>
         <div class="station-info">
           <div class="station-name">${this._esc(s.name)}</div>
-          <div class="station-loc">${this._esc(s.location)}</div>
+          <div class="station-meta">
+            <span class="station-loc">${this._esc(s.location)}</span>
+            ${s.genre ? `<span class="station-genre">${this._esc(s.genre)}</span>` : ""}
+          </div>
         </div>
         ${s.website ? `<a class="station-ext" href="${this._esc(s.website)}" target="_blank" rel="noopener" title="Visit website">${SVG.extLink}</a>` : ""}
       `;
@@ -242,7 +289,7 @@ class AripdRadyola extends HTMLElement {
     this._isPlaying = true;
 
     this._elPName.textContent = s.name;
-    this._elPLoc.textContent = s.location;
+    this._elPLoc.textContent = s.genre ? `${s.location}  ·  ${s.genre}` : s.location;
     document.title = `${s.name} — Radyola`;
     this._btnPlay.innerHTML = SVG.pause;
     this._elBar.classList.add("visible", "is-playing");

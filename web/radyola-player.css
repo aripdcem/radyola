@@ -134,9 +134,19 @@
   font-size: 15px; font-weight: 600; color: #e4e4ef;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.station-loc {
-  font-size: 12px; color: #6b6b8a; margin-top: 2px;
+.station-meta {
+  display: flex; align-items: center; gap: 8px; margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.station-loc {
+  font-size: 12px; color: #6b6b8a;
+}
+.station-genre {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+  color: #c084fc; background: rgba(192,132,252,.1);
+  padding: 2px 8px; border-radius: 100px;
+  border: 1px solid rgba(192,132,252,.2);
+  flex-shrink: 0;
 }
 
 .station-ext {
