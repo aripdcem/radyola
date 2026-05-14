@@ -92,3 +92,9 @@ iOSInjectionProject/
 # Python
 __pycache__/
 *.pyc
+
+# Build artifacts
+*.deb
+*.exe
+*.spec
+dist/
