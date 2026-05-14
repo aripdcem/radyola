@@ -14,10 +14,12 @@
 
 ## 🍎 macOS
 
-SwiftUI + AVFoundation tabanlı menü çubuğu radyo çalar.
+SwiftUI MenuBarExtra + AVFoundation tabanlı menü çubuğu radyo çalar.
+Google Sheets'ten dinamik istasyon listesi, ülke bazlı alt menüler, genre desteği,
+media key entegrasyonu (MPRemoteCommandCenter) ve ayar yönetimi içerir.
 
 - **Konum:** [`macosx/`](macosx/)
-- **Gereksinim:** macOS 13.0+ (Ventura), Xcode 15+
+- **Gereksinim:** macOS 14.0+ (Sonoma), Xcode 15+
 
 ### Kurulum & Çalıştırma
 

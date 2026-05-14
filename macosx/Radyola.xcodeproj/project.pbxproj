@@ -7,27 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B25397FE2A0301C900802DDB /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */; };
-		B25398002A03021500802DDB /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */; };
-		B295EBB42A07B8300040170B /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295EBB32A07B8300040170B /* StreamView.swift */; };
-		B295EBB62A07BA600040170B /* SoundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295EBB52A07BA600040170B /* SoundManager.swift */; };
 		B2A073572A02E90B001DCE0D /* RadyolaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073562A02E90B001DCE0D /* RadyolaApp.swift */; };
-		B2A073592A02E90B001DCE0D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A073582A02E90B001DCE0D /* ContentView.swift */; };
 		B2A0735B2A02E90C001DCE0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2A0735A2A02E90C001DCE0D /* Assets.xcassets */; };
 		B2A0735E2A02E90C001DCE0D /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2A0735D2A02E90C001DCE0D /* Preview Assets.xcassets */; };
+		C100000000000001 /* RadioStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C200000000000001 /* RadioStation.swift */; };
+		C100000000000002 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C200000000000002 /* AudioPlayer.swift */; };
+		C100000000000003 /* StationMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C200000000000003 /* StationMenuBuilder.swift */; };
+		C100000000000004 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C200000000000004 /* SettingsManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
-		B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsView.swift; sourceTree = "<group>"; };
-		B295EBB32A07B8300040170B /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
-		B295EBB52A07BA600040170B /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 		B2A073532A02E90B001DCE0D /* Radyola.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Radyola.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2A073562A02E90B001DCE0D /* RadyolaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadyolaApp.swift; sourceTree = "<group>"; };
-		B2A073582A02E90B001DCE0D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B2A0735A2A02E90C001DCE0D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B2A0735D2A02E90C001DCE0D /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		B2A0735F2A02E90C001DCE0D /* Radyola.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Radyola.entitlements; sourceTree = "<group>"; };
+		C200000000000001 /* RadioStation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioStation.swift; sourceTree = "<group>"; };
+		C200000000000002 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
+		C200000000000003 /* StationMenuBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StationMenuBuilder.swift; sourceTree = "<group>"; };
+		C200000000000004 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,12 +58,11 @@
 		B2A073552A02E90B001DCE0D /* Radyola */ = {
 			isa = PBXGroup;
 			children = (
-				B295EBB52A07BA600040170B /* SoundManager.swift */,
 				B2A073562A02E90B001DCE0D /* RadyolaApp.swift */,
-				B2A073582A02E90B001DCE0D /* ContentView.swift */,
-				B295EBB32A07B8300040170B /* StreamView.swift */,
-				B25397FD2A0301C900802DDB /* GeneralSettingsView.swift */,
-				B25397FF2A03021500802DDB /* AdvancedSettingsView.swift */,
+				C200000000000001 /* RadioStation.swift */,
+				C200000000000002 /* AudioPlayer.swift */,
+				C200000000000003 /* StationMenuBuilder.swift */,
+				C200000000000004 /* SettingsManager.swift */,
 				B2A0735A2A02E90C001DCE0D /* Assets.xcassets */,
 				B2A0735F2A02E90C001DCE0D /* Radyola.entitlements */,
 				B2A0735C2A02E90C001DCE0D /* Preview Content */,
@@ -151,12 +148,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B2A073592A02E90B001DCE0D /* ContentView.swift in Sources */,
 				B2A073572A02E90B001DCE0D /* RadyolaApp.swift in Sources */,
-				B25397FE2A0301C900802DDB /* GeneralSettingsView.swift in Sources */,
-				B25398002A03021500802DDB /* AdvancedSettingsView.swift in Sources */,
-				B295EBB42A07B8300040170B /* StreamView.swift in Sources */,
-				B295EBB62A07BA600040170B /* SoundManager.swift in Sources */,
+				C100000000000001 /* RadioStation.swift in Sources */,
+				C100000000000002 /* AudioPlayer.swift in Sources */,
+				C100000000000003 /* StationMenuBuilder.swift in Sources */,
+				C100000000000004 /* SettingsManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -213,7 +209,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.3;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -267,7 +263,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.3;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
