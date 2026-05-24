@@ -4,10 +4,17 @@ import Foundation
 // Veri Modeli
 // ──────────────────────────────────────────────
 
-/// Google Sheets CSV export URL — kanal listesi buradan çekilir
-let stationsCSVURL =
-    "https://docs.google.com/spreadsheets/d/"
-    + "1WetccPDwGuUAqNQzUTVNCKy1k48MDM1bvLnDlfdRhis/export?format=csv"
+/// JSON URL — kanal listesi buradan çekilir
+let stationsJSONURL = "https://gitlab.com/aripd/radyola/-/raw/main/data/stations.json"
+
+/// JSON decode için yardımcı struct
+private struct StationJSON: Codable {
+    let title: String
+    let url: String
+    let website: String?
+    let location: String?
+    let genre: String?
+}
 
 /// Ülke adından bayrak emoji'sine eşleme
 private let countryFlags: [String: String] = [
@@ -100,70 +107,28 @@ struct RadioStation: Identifiable, Equatable {
 }
 
 // ──────────────────────────────────────────────
-// Google Sheets CSV Parse
+// JSON Fetch
 // ──────────────────────────────────────────────
 
-/// Google Sheets'ten CSV olarak kanal listesini çeker ve parse eder.
+/// JSON kaynağından kanal listesini çeker ve parse eder.
 func fetchStations() async -> [RadioStation] {
-    guard let url = URL(string: stationsCSVURL) else {
+    guard let url = URL(string: stationsJSONURL) else {
         return fallbackStations()
     }
-
     do {
         var request = URLRequest(url: url, timeoutInterval: 10)
         request.setValue("Radyola/1.0", forHTTPHeaderField: "User-Agent")
         let (data, _) = try await URLSession.shared.data(for: request)
-
-        guard let csv = String(data: data, encoding: .utf8) else {
-            return fallbackStations()
+        let items = try JSONDecoder().decode([StationJSON].self, from: data)
+        let stations = items.compactMap { item -> RadioStation? in
+            guard !item.title.isEmpty, !item.url.isEmpty else { return nil }
+            return RadioStation(title: item.title, url: item.url, location: item.location ?? "", genre: item.genre ?? "")
         }
-
-        let stations = parseCSV(csv)
         return stations.isEmpty ? fallbackStations() : stations
     } catch {
-        print("radyola: Google Sheets'e bağlanılamadı (\(error)) — fallback kullanılıyor")
+        print("radyola: JSON verisi alınamadı (\(error)) — fallback kullanılıyor")
         return fallbackStations()
     }
-}
-
-/// CSV string'ini RadioStation dizisine parse eder.
-private func parseCSV(_ csv: String) -> [RadioStation] {
-    var stations: [RadioStation] = []
-
-    for line in csv.components(separatedBy: .newlines) {
-        let row = parseCSVLine(line)
-        guard row.count >= 3 else { continue }
-
-        let title = row[1].trimmingCharacters(in: .whitespaces)
-        let url = row[2].trimmingCharacters(in: .whitespaces)
-        let location = row.count > 4 ? row[4].trimmingCharacters(in: .whitespaces) : ""
-        let genre = row.count > 5 ? row[5].trimmingCharacters(in: .whitespaces) : ""
-
-        guard !title.isEmpty, !url.isEmpty else { continue }
-        stations.append(RadioStation(title: title, url: url, location: location, genre: genre))
-    }
-
-    return stations
-}
-
-/// CSV satırını alanlara ayırır (tırnak içindeki virgülleri korur).
-private func parseCSVLine(_ line: String) -> [String] {
-    var fields: [String] = []
-    var current = ""
-    var inQuotes = false
-
-    for char in line {
-        if char == "\"" {
-            inQuotes.toggle()
-        } else if char == "," && !inQuotes {
-            fields.append(current)
-            current = ""
-        } else {
-            current.append(char)
-        }
-    }
-    fields.append(current)
-    return fields
 }
 
 /// İnternet bağlantısı yoksa kullanılacak varsayılan istasyonlar.
@@ -180,7 +145,7 @@ func fallbackStations() -> [RadioStation] {
     ]
 }
 
-/// İstasyonları ülkeye göre gruplar. Sıralama: orijinal CSV sırası korunur.
+/// İstasyonları ülkeye göre gruplar. Sıralama: orijinal JSON sırası korunur.
 func groupStationsByCountry(_ stations: [RadioStation]) -> [(country: String, stations: [RadioStation])] {
     var groups: [(String, [RadioStation])] = []
     var seen: [String: Int] = [:]

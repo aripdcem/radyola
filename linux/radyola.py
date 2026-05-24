@@ -20,8 +20,6 @@ Lisans: MIT
 
 import sys
 import os
-import csv
-import io
 import json
 import logging
 import urllib.request
@@ -55,11 +53,8 @@ log = logging.getLogger("radyola")
 # Veri Modeli
 # ──────────────────────────────────────────────
 
-# Google Sheets CSV export URL'si — kanal listesi buradan çekilir
-STATIONS_CSV_URL = (
-    "https://docs.google.com/spreadsheets/d/"
-    "1WetccPDwGuUAqNQzUTVNCKy1k48MDM1bvLnDlfdRhis/export?format=csv"
-)
+# JSON kanal listesi URL'si — kanal listesi buradan çekilir
+STATIONS_JSON_URL = "https://gitlab.com/aripd/radyola/-/raw/main/data/stations.json"
 
 # Ülke adından bayrak emoji'sine eşleme
 _COUNTRY_FLAGS = {
@@ -108,7 +103,7 @@ _COUNTRY_FLAGS = {
 class RadioStation:
     """Bir radyo istasyonunu temsil eder.
 
-    CSV sütunları: tarih, isim, url, website, konum (şehir, ülke)
+    JSON alanları: date, title, url, website, location, genre
     """
 
     title: str
@@ -135,30 +130,26 @@ class RadioStation:
         return parts[0].strip() if parts else ""
 
 
-def _fetch_stations_from_csv() -> list[RadioStation]:
-    """Google Sheets'ten CSV olarak kanal listesini çeker ve parse eder.
+def _fetch_stations_from_json() -> list[RadioStation]:
+    """JSON dosyasından kanal listesini çeker ve parse eder.
 
-    CSV formatı (başlık satırı yok):
-        tarih, isim, url, website, konum
+    JSON formatı: [{"date": ..., "title": ..., "url": ..., "website": ..., "location": ..., "genre": ...}, ...]
     """
     try:
         req = urllib.request.Request(
-            STATIONS_CSV_URL,
+            STATIONS_JSON_URL,
             headers={"User-Agent": "Radyola/1.0"},
         )
         with urllib.request.urlopen(req, timeout=10) as response:
             raw = response.read().decode("utf-8")
 
+        data = json.loads(raw)
         stations = []
-        reader = csv.reader(io.StringIO(raw))
-        for row in reader:
-            if len(row) < 3:
-                continue
-            # Sütunlar: tarih(0), isim(1), url(2), website(3), konum(4), tarz(5)
-            title = row[1].strip()
-            url = row[2].strip()
-            location = row[4].strip() if len(row) > 4 else ""
-            genre = row[5].strip() if len(row) > 5 else ""
+        for item in data:
+            title = item.get("title", "").strip()
+            url = item.get("url", "").strip()
+            location = item.get("location", "")
+            genre = item.get("genre", "")
 
             if not title or not url:
                 continue
@@ -166,14 +157,14 @@ def _fetch_stations_from_csv() -> list[RadioStation]:
             stations.append(RadioStation(title=title, url=url, location=location, genre=genre))
 
         if stations:
-            log.info(f"Google Sheets'ten {len(stations)} istasyon yüklendi")
+            log.info(f"JSON'dan {len(stations)} istasyon yüklendi")
             return stations
         else:
-            log.warning("Google Sheets'ten istasyon alınamadı — fallback kullanılıyor")
+            log.warning("JSON'dan istasyon alınamadı — fallback kullanılıyor")
             return _fallback_stations()
 
     except (urllib.error.URLError, OSError, ValueError) as e:
-        log.warning(f"Google Sheets'e bağlanılamadı ({e}) — fallback kullanılıyor")
+        log.warning(f"JSON kaynağına bağlanılamadı ({e}) — fallback kullanılıyor")
         return _fallback_stations()
 
 
@@ -188,7 +179,7 @@ def _fallback_stations() -> list[RadioStation]:
 
 
 # Uygulama başlangıcında istasyonları yükle
-STATIONS: list[RadioStation] = _fetch_stations_from_csv()
+STATIONS: list[RadioStation] = _fetch_stations_from_json()
 
 
 # ──────────────────────────────────────────────
@@ -235,7 +226,7 @@ APP_SETTINGS = load_settings()
 
 
 def _get_country_groups():
-    """İstasyonları ülkeye göre gruplar. Sıralama: orijinal CSV sırası korunur.
+    """İstasyonları ülkeye göre gruplar. Sıralama: orijinal JSON sırası korunur.
 
     Dönüş: OrderedDict { ülke_adı: [(index, RadioStation), ...] }
     """

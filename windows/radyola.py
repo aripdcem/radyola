@@ -18,8 +18,7 @@ Lisans: MIT
 
 import sys
 import os
-import csv
-import io
+
 import json
 import logging
 import threading
@@ -58,9 +57,8 @@ logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 # Veri Modeli
 # ──────────────────────────────────────────────
 
-STATIONS_CSV_URL = (
-    "https://docs.google.com/spreadsheets/d/"
-    "1WetccPDwGuUAqNQzUTVNCKy1k48MDM1bvLnDlfdRhis/export?format=csv"
+STATIONS_JSON_URL = (
+    "https://gitlab.com/aripd/radyola/-/raw/main/data/stations.json"
 )
 
 _COUNTRY_FLAGS = {
@@ -111,35 +109,33 @@ class RadioStation:
         return parts[0].strip() if parts else ""
 
 
-def _fetch_stations_from_csv() -> list[RadioStation]:
-    """Google Sheets'ten CSV olarak kanal listesini çeker."""
+def _fetch_stations_from_json() -> list[RadioStation]:
+    """GitLab'dan JSON olarak kanal listesini çeker."""
     try:
         req = urllib.request.Request(
-            STATIONS_CSV_URL, headers={"User-Agent": "Radyola/1.0"},
+            STATIONS_JSON_URL, headers={"User-Agent": "Radyola/1.0"},
         )
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             raw = response.read().decode("utf-8")
 
+        data = json.loads(raw)
         stations = []
-        reader = csv.reader(io.StringIO(raw))
-        for row in reader:
-            if len(row) < 3:
-                continue
-            title = row[1].strip()
-            url = row[2].strip()
-            location = row[4].strip() if len(row) > 4 else ""
-            genre = row[5].strip() if len(row) > 5 else ""
+        for item in data:
+            title = (item.get("title") or "").strip()
+            url = (item.get("url") or "").strip()
+            location = (item.get("location") or "").strip()
+            genre = (item.get("genre") or "").strip()
             if not title or not url:
                 continue
             stations.append(RadioStation(title=title, url=url, location=location, genre=genre))
 
         if stations:
-            log.info(f"Google Sheets'ten {len(stations)} istasyon yüklendi")
+            log.info(f"JSON'dan {len(stations)} istasyon yüklendi")
             return stations
-        log.warning("Google Sheets'ten istasyon alınamadı — fallback")
+        log.warning("JSON'dan istasyon alınamadı — fallback")
         return _fallback_stations()
-    except (urllib.error.URLError, OSError, ValueError) as e:
-        log.warning(f"Google Sheets'e bağlanılamadı ({e}) — fallback")
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError) as e:
+        log.warning(f"JSON verisi alınamadı ({e}) — fallback")
         return _fallback_stations()
 
 
@@ -151,7 +147,7 @@ def _fallback_stations() -> list[RadioStation]:
     ]
 
 
-STATIONS: list[RadioStation] = _fetch_stations_from_csv()
+STATIONS: list[RadioStation] = _fetch_stations_from_json()
 
 
 # ──────────────────────────────────────────────
