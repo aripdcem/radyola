@@ -1,7 +1,7 @@
 import Fuse from "fuse.js";
 
-const SHEET_URL =
-  "https://sheets.googleapis.com/v4/spreadsheets/1WetccPDwGuUAqNQzUTVNCKy1k48MDM1bvLnDlfdRhis/values/Sheet1?alt=json&key=AIzaSyD9GqS9UoqRh3Pl2kZVbTZ9GGpp1OgWJRY";
+const STATIONS_URL =
+  "https://gitlab.com/aripd/radyola/-/raw/main/data/stations.json";
 
 /* ── helpers ─────────────────────────────────────────────── */
 function el(tag, cls, attrs) {
@@ -129,15 +129,15 @@ class AripdRadyola extends HTMLElement {
   /* ── data ─────────────────────────── */
   async _fetchData() {
     try {
-      const res = await fetch(SHEET_URL);
+      const res = await fetch(STATIONS_URL);
       const json = await res.json();
-      this._stations = json.values.map((r, i) => ({
+      this._stations = json.map((r, i) => ({
         id: i,
-        name: r[1],
-        url: r[2],
-        website: r[3] || "",
-        location: r[4] || "",
-        genre: r[5] || "",
+        name: r.title || "",
+        url: r.url || "",
+        website: r.website || "",
+        location: r.location || "",
+        genre: r.genre || "",
       }));
       this._filtered = [...this._stations];
       this._buildLocations();

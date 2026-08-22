@@ -106,3 +106,8 @@ android/app/release/
 *.apk
 *.aab
 .cxx/
+
+# Crawler
+crawler/output/
+crawler/credentials.json
+crawler/node_modules/
