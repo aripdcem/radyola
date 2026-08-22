@@ -9,6 +9,7 @@
 | 🍎 macOS | Swift, SwiftUI | AVFoundation | MenuBarExtra |
 | 🐧 Linux | Python, GTK4, Libadwaita | GStreamer | D-Bus StatusNotifierItem |
 | 🪟 Windows | Python, pystray, Pillow | pygame (SDL2) | Win32 System Tray |
+| 🤖 Android | Kotlin, Jetpack Compose | Media3 (ExoPlayer) | MediaSession bildirimi |
 
 ---
 
@@ -134,6 +135,47 @@ REM Çift tıklayarak da çalıştırılabilir
 
 ```cmd
 rmdir /s /q "%APPDATA%\Radyola"
+```
+
+---
+
+## 🤖 Android
+
+Jetpack Compose + Media3 (ExoPlayer) tabanlı radyo çalar. Arka planda çalma,
+bildirim ve kilit ekranı kontrolleri, favoriler ve uyku zamanlayıcı içerir.
+
+- **Konum:** [`android/`](android/)
+- **Gereksinim:** Android 7.0+ (API 24), derleme için JDK 17 + Android SDK 34
+
+### Derleme
+
+```bash
+cd android
+echo "sdk.dir=$HOME/Android/Sdk" > local.properties
+
+./gradlew assembleDebug
+# → app/build/outputs/apk/debug/app-debug.apk
+```
+
+Yayın (release) APK için:
+
+```bash
+./gradlew assembleRelease
+# → app/build/outputs/apk/release/app-release.apk  (~3 MB)
+```
+
+### Cihaza Kurma
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Kablosuz hata ayıklama için önce `adb connect <IP>:<PORT>` çalıştırın.
+
+### Kaldırma
+
+```bash
+adb uninstall com.aripd.radyola
 ```
 
 ---

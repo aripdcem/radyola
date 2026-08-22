@@ -98,3 +98,11 @@ __pycache__/
 *.exe
 *.spec
 dist/
+
+# Android
+android/local.properties
+android/.gradle/
+android/app/release/
+*.apk
+*.aab
+.cxx/
