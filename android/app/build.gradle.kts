@@ -70,4 +70,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     testImplementation("junit:junit:4.13.2")
+    // android.jar'daki org.json saplamaları çağrılınca fırlatıyor; JSON
+    // ayrıştırmasını birim testinde çalıştırabilmek için gerçek uygulama.
+    testImplementation("org.json:json:20240303")
 }

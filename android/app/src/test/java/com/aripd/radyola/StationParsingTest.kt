@@ -1,7 +1,7 @@
 package com.aripd.radyola
 
 import com.aripd.radyola.data.RadioStation
-import com.aripd.radyola.data.parseCsv
+import com.aripd.radyola.data.parseStations
 import com.aripd.radyola.player.PlaylistResolver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,55 +12,111 @@ import org.junit.Test
 class StationParsingTest {
 
     @Test
-    fun `tırnak içindeki virgül alanı bölmez`() {
-        val csv = """2/1/2023,Açık Radyo,https://stream.34bit.net/ar.mp3,,"İstanbul, Türkiye",Eclectic"""
-        val stations = parseCsv(csv)
+    fun `tüm alanlar okunur`() {
+        val json = """
+            [{
+              "date": "2/1/2023",
+              "title": "Açık Radyo",
+              "url": "https://stream.34bit.net/ar.mp3",
+              "website": "https://acikradyo.com.tr",
+              "location": "İstanbul, Türkiye",
+              "countryCode": "TR",
+              "genre": "Eclectic"
+            }]
+        """.trimIndent()
+
+        val stations = parseStations(json)
 
         assertEquals(1, stations.size)
-        assertEquals("Açık Radyo", stations[0].name)
-        assertEquals("İstanbul, Türkiye", stations[0].location)
-        assertEquals("Eclectic", stations[0].genre)
+        with(stations[0]) {
+            assertEquals("Açık Radyo", name)
+            assertEquals("https://stream.34bit.net/ar.mp3", url)
+            assertEquals("https://acikradyo.com.tr", website)
+            assertEquals("İstanbul, Türkiye", location)
+            assertEquals("TR", countryCode)
+            assertEquals("Eclectic", genre)
+        }
     }
 
     @Test
-    fun `akış adresi olmayan satırlar atlanır`() {
-        val csv = """
-            Tarih,Ad,URL,Web,Konum,Tür
-            2/1/2023,Geçerli,https://example.com/stream.mp3,,"Roma, Italy",Jazz
-            2/1/2023,Adressiz,,,"Paris, France",Pop
+    fun `çalınamayacak kayıtlar atlanır, sağlamlar korunur`() {
+        val json = """
+            [
+              {"title": "Adressiz", "url": "", "location": "Paris, France"},
+              {"title": "", "url": "https://example.com/a.mp3"},
+              {"title": "Göreli adres", "url": "/stream.mp3"},
+              {"title": "Geçerli", "url": "https://example.com/b.mp3", "location": "Roma, Italy"}
+            ]
         """.trimIndent()
 
-        val stations = parseCsv(csv)
+        val stations = parseStations(json)
 
         assertEquals(1, stations.size)
         assertEquals("Geçerli", stations[0].name)
     }
 
     @Test
-    fun `eksik sondaki sütunlar boş kabul edilir`() {
-        val csv = "2/1/2023,Sade,https://example.com/s.mp3"
-        val stations = parseCsv(csv)
+    fun `eksik isteğe bağlı alanlar boş kabul edilir`() {
+        val stations = parseStations("""[{"title": "Sade", "url": "https://example.com/s.mp3"}]""")
 
         assertEquals(1, stations.size)
-        assertEquals("", stations[0].location)
-        assertEquals("", stations[0].genre)
+        with(stations[0]) {
+            assertEquals("", website)
+            assertEquals("", location)
+            assertEquals("", countryCode)
+            assertEquals("", genre)
+        }
     }
 
     @Test
-    fun `konumdan şehir ülke ve bayrak çıkarılır`() {
-        val station = RadioStation(name = "Test", url = "http://x", location = "İstanbul, Türkiye")
+    fun `boş dizi boş liste döndürür`() {
+        assertTrue(parseStations("[]").isEmpty())
+    }
+
+    @Test
+    fun `bilinmeyen alanlar yok sayılır`() {
+        // directory.json kalite alanları taşır; kuratörlü liste taşımaz.
+        // Aynı ayrıştırıcı ikisini de okuyabilmeli.
+        val json = """
+            [{"title": "X", "url": "https://e.com/x.mp3", "votes": 9001,
+              "bitrate": 128, "codec": "MP3", "hls": false, "lastCheckOk": true}]
+        """.trimIndent()
+
+        assertEquals("X", parseStations(json).single().name)
+    }
+
+    @Test
+    fun `bayrak ISO kodundan türetilir`() {
+        assertEquals("🇹🇷", RadioStation("x", "http://x", countryCode = "TR").flag)
+        assertEquals("🇧🇪", RadioStation("x", "http://x", countryCode = "be").flag)
+        assertEquals("🇦🇺", RadioStation("x", "http://x", countryCode = "AU").flag)
+    }
+
+    @Test
+    fun `kod yoksa ülke adı tablosuna düşülür`() {
+        val station = RadioStation("x", "http://x", location = "Brussels, Belgium")
+
+        assertEquals("🇧🇪", station.flag)
+    }
+
+    @Test
+    fun `geçersiz kod bayrak üretmez`() {
+        assertEquals("📻", RadioStation("x", "http://x", countryCode = "XYZ").flag)
+        assertEquals("📻", RadioStation("x", "http://x", countryCode = "12").flag)
+        assertEquals("📻", RadioStation("x", "http://x").flag)
+    }
+
+    @Test
+    fun `konumdan şehir ve ülke çıkarılır`() {
+        val station = RadioStation("x", "http://x", location = "İstanbul, Türkiye")
 
         assertEquals("İstanbul", station.city)
         assertEquals("Türkiye", station.country)
-        assertEquals("🇹🇷", station.flag)
     }
 
     @Test
     fun `konumsuz istasyon Diğer ülkesine düşer`() {
-        val station = RadioStation(name = "Test", url = "http://x")
-
-        assertEquals("Diğer", station.country)
-        assertEquals("📻", station.flag)
+        assertEquals("Diğer", RadioStation("x", "http://x").country)
     }
 
     @Test

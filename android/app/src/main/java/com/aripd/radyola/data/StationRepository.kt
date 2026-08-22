@@ -12,9 +12,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * İstasyon listesini Google Sheets'ten çeker, diske önbelleğe alır.
+ * İstasyon listesini ortak JSON kaynağından çeker, diske önbelleğe alır.
  *
- * Diğer platformlarla (macOS / Linux / Windows / web) aynı kaynağı kullanır.
+ * Kaynak tüm platformlarda (macOS / Linux / Windows / web) ortaktır;
+ * şema `data/README.md` içinde tanımlı.
  */
 class StationRepository(context: Context) {
 
@@ -32,6 +33,11 @@ class StationRepository(context: Context) {
             ?: FALLBACK_STATIONS
     }
 
+    /** Yalnızca diskteki önbelleği okur — açılışta anında liste göstermek için. */
+    suspend fun cachedStations(): List<RadioStation>? = withContext(Dispatchers.IO) {
+        readCache()
+    }
+
     /**
      * Ağ denemesini kısa bir beklemeyle bir kez tekrarlar.
      *
@@ -44,25 +50,25 @@ class StationRepository(context: Context) {
         return fetchFromNetwork()
     }
 
-    /** Yalnızca diskteki önbelleği okur — açılışta anında liste göstermek için. */
-    suspend fun cachedStations(): List<RadioStation>? = withContext(Dispatchers.IO) {
-        readCache()
-    }
-
     private fun fetchFromNetwork(): List<RadioStation>? {
         return try {
-            val connection = (URL(STATIONS_CSV_URL).openConnection() as HttpURLConnection).apply {
+            val connection = (URL(STATIONS_URL).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
                 readTimeout = 10_000
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", "Radyola-Android/1.0")
+                setRequestProperty("Accept", "application/json")
             }
-            val csv = try {
+            val body = try {
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    Log.w(TAG, "Beklenmeyen yanıt: HTTP ${connection.responseCode}")
+                    return null
+                }
                 connection.inputStream.bufferedReader().use { it.readText() }
             } finally {
                 connection.disconnect()
             }
-            parseCsv(csv).takeIf { it.isNotEmpty() }
+            parseStations(body).takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
             Log.w(TAG, "İstasyon listesi çekilemedi, önbelleğe düşülüyor", e)
             null
@@ -70,35 +76,29 @@ class StationRepository(context: Context) {
     }
 
     private fun readCache(): List<RadioStation>? = try {
-        if (!cacheFile.exists()) null else {
-            val array = JSONArray(cacheFile.readText())
-            List(array.length()) { i ->
-                val o = array.getJSONObject(i)
-                RadioStation(
-                    name = o.getString("name"),
-                    url = o.getString("url"),
-                    website = o.optString("website"),
-                    location = o.optString("location"),
-                    genre = o.optString("genre")
-                )
-            }.takeIf { it.isNotEmpty() }
-        }
+        if (!cacheFile.exists()) null
+        else parseStations(cacheFile.readText()).takeIf { it.isNotEmpty() }
     } catch (e: Exception) {
         Log.w(TAG, "Önbellek okunamadı", e)
         null
     }
 
+    /**
+     * Önbelleği kaynakla aynı şemada yazar — böylece [readCache] ile
+     * [fetchFromNetwork] aynı ayrıştırıcıyı paylaşır.
+     */
     private fun writeCache(stations: List<RadioStation>) {
         try {
             val array = JSONArray()
-            stations.forEach { s ->
+            stations.forEach { station ->
                 array.put(
                     JSONObject()
-                        .put("name", s.name)
-                        .put("url", s.url)
-                        .put("website", s.website)
-                        .put("location", s.location)
-                        .put("genre", s.genre)
+                        .put(FIELD_TITLE, station.name)
+                        .put(FIELD_URL, station.url)
+                        .put(FIELD_WEBSITE, station.website)
+                        .put(FIELD_LOCATION, station.location)
+                        .put(FIELD_COUNTRY_CODE, station.countryCode)
+                        .put(FIELD_GENRE, station.genre)
                 )
             }
             cacheFile.writeText(array.toString())
@@ -111,73 +111,42 @@ class StationRepository(context: Context) {
         private const val TAG = "StationRepository"
         private const val RETRY_DELAY_MS = 1_500L
 
-        /** Google Sheets CSV export URL'si — tüm platformlarda ortak. */
-        const val STATIONS_CSV_URL =
-            "https://docs.google.com/spreadsheets/d/" +
-                "1WetccPDwGuUAqNQzUTVNCKy1k48MDM1bvLnDlfdRhis/export?format=csv"
+        /** Kuratörlü istasyon listesi — tüm platformlarda ortak. */
+        const val STATIONS_URL = "https://radyola.aripd.com/data/stations.json"
     }
 }
 
+private const val FIELD_TITLE = "title"
+private const val FIELD_URL = "url"
+private const val FIELD_WEBSITE = "website"
+private const val FIELD_LOCATION = "location"
+private const val FIELD_COUNTRY_CODE = "countryCode"
+private const val FIELD_GENRE = "genre"
+
 /**
- * CSV metnini istasyon listesine çevirir.
+ * JSON dizisini istasyon listesine çevirir.
  *
- * Başlık satırı ayrı işaretlenmediğinden, URL'si `http` ile başlamayan satırlar
- * atlanır — bu hem başlığı hem de bozuk satırları eler.
+ * Adı veya çalınabilir bir adresi olmayan kayıtlar atlanır — tek bozuk satır
+ * yüzünden listenin tamamını kaybetmemek için ayrıştırma kayıt bazında toleranslı.
  */
-internal fun parseCsv(csv: String): List<RadioStation> =
-    splitCsvRows(csv).mapNotNull { row ->
-        if (row.size < 3) return@mapNotNull null
-        val name = row[1].trim()
-        val url = row[2].trim()
-        if (name.isEmpty() || !url.startsWith("http")) return@mapNotNull null
-        RadioStation(
-            name = name,
-            url = url,
-            website = row.getOrElse(3) { "" }.trim(),
-            location = row.getOrElse(4) { "" }.trim(),
-            genre = row.getOrElse(5) { "" }.trim()
+internal fun parseStations(json: String): List<RadioStation> {
+    val array = JSONArray(json)
+    val stations = ArrayList<RadioStation>(array.length())
+    for (i in 0 until array.length()) {
+        val item = array.optJSONObject(i) ?: continue
+        val name = item.optString(FIELD_TITLE).trim()
+        val url = item.optString(FIELD_URL).trim()
+        if (name.isEmpty() || !url.startsWith("http")) continue
+        stations.add(
+            RadioStation(
+                name = name,
+                url = url,
+                website = item.optString(FIELD_WEBSITE).trim(),
+                location = item.optString(FIELD_LOCATION).trim(),
+                countryCode = item.optString(FIELD_COUNTRY_CODE).trim(),
+                genre = item.optString(FIELD_GENRE).trim()
+            )
         )
     }
-
-/**
- * CSV'yi satır ve alanlara böler.
- *
- * Tırnak içindeki virgül ve satır sonlarını korur, `""` kaçışını tek tırnağa çevirir.
- */
-private fun splitCsvRows(csv: String): List<List<String>> {
-    val rows = mutableListOf<List<String>>()
-    var fields = mutableListOf<String>()
-    val field = StringBuilder()
-    var inQuotes = false
-    var i = 0
-
-    fun endField() {
-        fields.add(field.toString())
-        field.setLength(0)
-    }
-
-    fun endRow() {
-        endField()
-        if (fields.any { it.isNotBlank() }) rows.add(fields)
-        fields = mutableListOf()
-    }
-
-    while (i < csv.length) {
-        val c = csv[i]
-        when {
-            inQuotes && c == '"' && i + 1 < csv.length && csv[i + 1] == '"' -> {
-                field.append('"'); i++
-            }
-            c == '"' -> inQuotes = !inQuotes
-            !inQuotes && c == ',' -> endField()
-            !inQuotes && (c == '\n' || c == '\r') -> {
-                if (c == '\r' && i + 1 < csv.length && csv[i + 1] == '\n') i++
-                endRow()
-            }
-            else -> field.append(c)
-        }
-        i++
-    }
-    endRow()
-    return rows
+    return stations
 }
