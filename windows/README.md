@@ -4,7 +4,7 @@
 
 ## Özellikler
 
-- **Google Sheets'ten dinamik istasyon listesi** (aynı CSV kaynağı)
+- **Dinamik istasyon listesi** (tüm platformlarla ortak JSON kaynağı)
 - **Play/Pause/Stop** kontrolleri
 - **System Tray** — pystray ile native Windows tray ikonu
 - **Ses Seviyesi** — 5 kademeli (0%, 25%, 50%, 75%, 100%)
@@ -39,7 +39,7 @@ python radyola.py
 | **Ses** | GStreamer (playbin) | pygame (SDL2_mixer) |
 | **Media Tuşları** | MPRIS D-Bus | — |
 | **Ayar Dizini** | `~/.config/radyola/` | `%APPDATA%/Radyola/` |
-| **İstasyon Kaynağı** | Google Sheets CSV | Google Sheets CSV (aynı) |
+| **İstasyon Kaynağı** | Ortak JSON | Ortak JSON (aynı) |
 
 ## Lisans
 

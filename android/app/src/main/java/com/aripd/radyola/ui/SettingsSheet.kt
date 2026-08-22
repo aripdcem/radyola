@@ -111,7 +111,7 @@ fun SettingsSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "İstasyon listesi tüm platformlarda ortak Google Sheets kaynağından gelir.",
+            "İstasyon listesi tüm platformlarda ortak JSON kaynağından gelir.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
         )

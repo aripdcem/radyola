@@ -58,7 +58,7 @@ logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 # ──────────────────────────────────────────────
 
 STATIONS_JSON_URL = (
-    "https://gitlab.com/aripd/radyola/-/raw/main/data/stations.json"
+    "https://radyola.aripd.com/data/stations.json"
 )
 
 _COUNTRY_FLAGS = {

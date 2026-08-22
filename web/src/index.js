@@ -1,7 +1,7 @@
 import Fuse from "fuse.js";
 
 const STATIONS_URL =
-  "https://gitlab.com/aripd/radyola/-/raw/main/data/stations.json";
+  "https://radyola.aripd.com/data/stations.json";
 
 /* ── helpers ─────────────────────────────────────────────── */
 function el(tag, cls, attrs) {

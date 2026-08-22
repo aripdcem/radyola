@@ -16,7 +16,7 @@
 ## 🍎 macOS
 
 SwiftUI MenuBarExtra + AVFoundation tabanlı menü çubuğu radyo çalar.
-Google Sheets'ten dinamik istasyon listesi, ülke bazlı alt menüler, genre desteği,
+Ortak JSON kaynağından dinamik istasyon listesi, ülke bazlı alt menüler, genre desteği,
 media key entegrasyonu (MPRemoteCommandCenter) ve ayar yönetimi içerir.
 
 - **Konum:** [`macosx/`](macosx/)
@@ -182,7 +182,7 @@ adb uninstall com.aripd.radyola
 
 ## Radyo İstasyonları
 
-Tüm platformlar aynı Google Sheets kaynağından dinamik istasyon listesi çeker:
+Tüm platformlar aynı JSON kaynağından ([`data/`](data/)) dinamik istasyon listesi çeker:
 
 🇹🇷 Açık Radyo · ITU Radio (Jazz/Blues, Classical, Rock) · TRT Haber · NTV Radyo · HABERTÜRK · Bozcaada · Gökçeada · Boğaziçi  
 🇧🇪 MUSIQ3 · VRT Klara · Viva Brabant Wallon · Radio Panik  

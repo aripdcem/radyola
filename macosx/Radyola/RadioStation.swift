@@ -5,7 +5,7 @@ import Foundation
 // ──────────────────────────────────────────────
 
 /// JSON URL — kanal listesi buradan çekilir
-let stationsJSONURL = "https://gitlab.com/aripd/radyola/-/raw/main/data/stations.json"
+let stationsJSONURL = "https://radyola.aripd.com/data/stations.json"
 
 /// JSON decode için yardımcı struct
 private struct StationJSON: Codable {

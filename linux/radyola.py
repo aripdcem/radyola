@@ -54,7 +54,7 @@ log = logging.getLogger("radyola")
 # ──────────────────────────────────────────────
 
 # JSON kanal listesi URL'si — kanal listesi buradan çekilir
-STATIONS_JSON_URL = "https://gitlab.com/aripd/radyola/-/raw/main/data/stations.json"
+STATIONS_JSON_URL = "https://radyola.aripd.com/data/stations.json"
 
 # Ülke adından bayrak emoji'sine eşleme
 _COUNTRY_FLAGS = {

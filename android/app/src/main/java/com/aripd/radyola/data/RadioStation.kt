@@ -3,8 +3,8 @@ package com.aripd.radyola.data
 /**
  * Bir radyo istasyonunu temsil eder.
  *
- * Alanlar Google Sheets tablosundaki sütunlarla birebir eşleşir:
- * `[0] sıra, [1] ad, [2] akış URL'si, [3] web sitesi, [4] konum, [5] tür`
+ * Alanlar ortak JSON şemasıyla birebir eşleşir (bkz. `data/README.md`):
+ * `title, url, website, location, countryCode, genre`
  */
 data class RadioStation(
     val name: String,

@@ -4,7 +4,7 @@ Jetpack Compose + Media3 (ExoPlayer) tabanlı internet radyo çalar.
 
 ## Özellikler
 
-- **Dinamik istasyon listesi** — diğer platformlarla ortak Google Sheets kaynağı,
+- **Dinamik istasyon listesi** — diğer platformlarla ortak JSON kaynağı,
   ağ yoksa disk önbelleği, o da yoksa gömülü varsayılan liste
 - **Arka planda çalma** — `MediaSessionService` ile ön plan servisi; bildirim,
   kilit ekranı kontrolleri ve kulaklık medya tuşları
@@ -74,7 +74,7 @@ com.aripd.radyola
 ├── MainViewModel.kt             Tüm ekran durumu, MediaController köprüsü
 ├── data/
 │   ├── RadioStation.kt          Model, ülke/şehir/bayrak türetmeleri
-│   ├── StationRepository.kt     Google Sheets CSV çekme + ayrıştırma + önbellek
+│   ├── StationRepository.kt     JSON çekme + ayrıştırma + önbellek
 │   └── SettingsStore.kt         DataStore: ayarlar ve favoriler
 ├── player/
 │   ├── RadyolaPlaybackService.kt  MediaSessionService (ön plan servisi)
