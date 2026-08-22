@@ -2,14 +2,17 @@
  * Radyola — radio-browser.info Crawler
  *
  * radio-browser.info API'sinden radyo istasyonu verilerini çeker ve
- * Radyola projesinin kullandığı Google Sheets CSV formatına uygun dosya üretir.
+ * "Keşfet" dizinini (data/directory.json) üretir.
+ *
+ * Kuratörlü listeye (data/stations.json) DOKUNMAZ — orası elle bakılan,
+ * her platformun varsayılan olarak yüklediği kısa listedir. Bir crawl'ın
+ * yan ürünü olarak yeniden üretilirse elle seçilen istasyonlar kaybolur.
  *
  * Kullanım:
- *   node crawler.js                         → Tüm ülkeler (varsayılan liste)
+ *   node crawler.js                         → Varsayılan ülke listesi
  *   node crawler.js --countries TR,BE,GB    → Belirli ülke kodları
- *   node crawler.js --all                   → Tüm dünya
- *   node crawler.js --min-votes 10          → Minimum oy sayısı filtresi
- *   node crawler.js --working-only          → Sadece çalışan istasyonlar
+ *   node crawler.js --all --min-votes 1000  → Tüm dünya, popüler istasyonlar
+ *   node crawler.js --include-broken        → Bozuk istasyonları da al
  */
 
 const https = require("https");
@@ -24,6 +27,10 @@ const API_BASE = "https://de1.api.radio-browser.info";
 // Radyola projesinde varsayılan ülkeler
 const DEFAULT_COUNTRIES = ["TR", "BE", "GB", "RU", "GR", "DE", "FR", "NL", "US", "JP"];
 
+// radio-browser'ın ham ülke adları uzun ve resmî ("The United Kingdom Of Great
+// Britain And Northern Ireland"). Platformların bayrak sözlükleri kısa adı
+// bekliyor, o yüzden ISO koddan kanonik kısa ada çeviriyoruz. Aşağıdaki tablo
+// yalnızca Intl'in verdiğinden farklı bir etiket istediğimiz yerler için.
 const COUNTRY_NAME_MAP = {
   TR: "Türkiye",
   BE: "Belgium",
@@ -56,6 +63,29 @@ const COUNTRY_NAME_MAP = {
   KR: "South Korea",
   ZA: "South Africa",
 };
+
+/* ── Country Names ─────────────────────────────────────────── */
+
+const regionNames = (() => {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" });
+  } catch {
+    return null; // ICU verisi yoksa (küçük Node derlemeleri) tabloya düşeriz
+  }
+})();
+
+/**
+ * ISO 3166-1 alpha-2 kodundan kısa, kanonik ülke adı üretir.
+ * Sıra: elle tanımlı tablo → Intl.DisplayNames → API'nin ham adı → kodun kendisi.
+ */
+function countryName(code, rawName) {
+  if (!code) return rawName || "";
+  if (COUNTRY_NAME_MAP[code]) return COUNTRY_NAME_MAP[code];
+  const display = regionNames ? regionNames.of(code) : null;
+  // Intl bilinmeyen kodu olduğu gibi geri verir; o durumda ham ada düşelim.
+  if (display && display !== code) return display;
+  return rawName || code;
+}
 
 /* ── CLI Argument Parsing ──────────────────────────────────── */
 
@@ -191,8 +221,9 @@ async function fetchStationsByCountry(countryCode, config) {
 
 function transformStation(station) {
   // Build location: "City, Country" or just "Country"
-  const city = station.state || "";
-  const country = station.country || COUNTRY_NAME_MAP[station.countrycode] || station.countrycode;
+  // state boşluk dizisi olabiliyor; trim etmezsek " , United States" üretiyor.
+  const city = (station.state || "").trim();
+  const country = countryName(station.countrycode, station.country);
   const location = city ? `${city}, ${country}` : country;
 
   // Tags → genre (capitalize, clean up)
@@ -207,12 +238,15 @@ function transformStation(station) {
     : "";
 
   return {
-    // Radyola CSV format fields
+    // Radyola ortak alanları — data/stations.json ile aynı şema
     date: new Date().toISOString().split("T")[0],
     title: station.name.trim(),
     url: station.url_resolved || station.url,
     website: station.homepage || "",
     location: location,
+    // Bayrak emoji'si ada değil koda bakılarak türetilsin diye: her platform
+    // iki harfi regional indicator'a çevirebiliyor, 164 satırlık ad tablosu gerekmiyor.
+    countryCode: station.countrycode || "",
     genre: genre,
 
     // Extended fields (JSON only)
@@ -258,10 +292,14 @@ function toCSV(stations) {
 async function main() {
   const config = parseArgs();
   const outputDir = path.join(__dirname, "output");
+  const dataDir = path.join(__dirname, "..", "data");
 
   // Create output directory
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
+  }
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
   }
 
   console.log("╔══════════════════════════════════════════╗");
@@ -281,10 +319,10 @@ async function main() {
 
   for (let i = 0; i < countries.length; i++) {
     const code = countries[i];
-    const countryName = COUNTRY_NAME_MAP[code] || code;
+    const label = countryName(code);
 
     process.stdout.write(
-      `[${i + 1}/${countries.length}] 🔍 ${countryName} (${code})...`
+      `[${i + 1}/${countries.length}] 🔍 ${label} (${code})...`
     );
 
     try {
@@ -352,11 +390,21 @@ async function main() {
   fs.writeFileSync(jsonPath, jsonData, "utf8");
   console.log(`📄 JSON kaydedildi: ${jsonPath}`);
 
-  // ── Write compact JSON (without _meta, for direct use) ──
-  const compactStations = uniqueStations.map(({ _meta, ...rest }) => rest);
-  const compactPath = path.join(outputDir, "stations-compact.json");
-  fs.writeFileSync(compactPath, JSON.stringify(compactStations, null, 2), "utf8");
-  console.log(`📄 Compact JSON kaydedildi: ${compactPath}`);
+  // ── Write published directory (data/directory.json) ──
+  // Uygulamaların "Keşfet" modunda çektiği dosya. Ham _meta'nın tamamı değil,
+  // yalnızca kalite sinyalleri taşınır: sıralama ve "bozukları gizle" için
+  // gereken alanlar bunlar, gerisi dosyayı gereksiz şişiriyor.
+  const directory = uniqueStations.map(({ _meta, ...rest }) => ({
+    ...rest,
+    votes: _meta.votes,
+    bitrate: _meta.bitrate,
+    codec: _meta.codec,
+    hls: _meta.hls,
+    lastCheckOk: _meta.lastcheckok,
+  }));
+  const directoryPath = path.join(dataDir, "directory.json");
+  fs.writeFileSync(directoryPath, JSON.stringify(directory, null, 2) + "\n", "utf8");
+  console.log(`📄 Keşfet dizini kaydedildi: ${directoryPath}`);
 
   // ── Write per-country files ──
   const byCountry = {};
@@ -386,11 +434,14 @@ async function main() {
   console.log("\n╔══════════════════════════════════════════╗");
   console.log("║   ✅ Crawl tamamlandı!                    ║");
   console.log("╚══════════════════════════════════════════╝");
+  console.log(
+    "\nℹ️  data/stations.json (kuratörlü liste) değiştirilmedi — elle bakılır."
+  );
   console.log("\nÜlke bazlı dağılım:");
   Object.entries(byCountry)
     .sort((a, b) => b[1].length - a[1].length)
     .forEach(([code, stations]) => {
-      const name = COUNTRY_NAME_MAP[code] || code;
+      const name = countryName(code);
       const bar = "█".repeat(Math.ceil(stations.length / 20));
       console.log(`  ${code} ${name.padEnd(20)} ${String(stations.length).padStart(5)} ${bar}`);
     });

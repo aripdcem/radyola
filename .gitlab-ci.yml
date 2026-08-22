@@ -39,7 +39,7 @@ pages:
     - cp web/radyola.svg public/
     - cp web/radyola-player.css public/
     - cp -r web/dist public/
-    - cp data/stations.json public/data/
+    - cp data/*.json public/data/
   artifacts:
     paths:
       - public
