@@ -1,6 +1,6 @@
 # Radyola — Monetizasyon Stratejisi
 
-Radyola, çoklu platform (Web, Linux, macOS, Windows) internet radyo çalar uygulamasıdır. Bu doküman, projenin gelir modeline dönüştürülmesi için uygulanabilir stratejileri detaylandırır.
+Radyola, çoklu platform (Web, Android, Linux, macOS, Windows) internet radyo çalar uygulamasıdır. Bu doküman, projenin gelir modeline dönüştürülmesi için uygulanabilir stratejileri detaylandırır.
 
 ---
 
@@ -8,17 +8,17 @@ Radyola, çoklu platform (Web, Linux, macOS, Windows) internet radyo çalar uygu
 
 | Özellik | Değer |
 |---|---|
-| **Platformlar** | Web (GitLab Pages), Linux (.deb), macOS (Swift), Windows (.exe) |
-| **İstasyon Kaynağı** | Google Sheets (dinamik, düzenlenebilir) |
+| **Platformlar** | Web (GitLab Pages), Android (Kotlin/Compose), Linux (.deb), macOS (Swift), Windows (.exe) |
+| **İstasyon Kaynağı** | Depodaki JSON ([`data/`](../data/)), GitLab Pages'ten yayınlanır |
 | **Lisans** | MIT (açık kaynak) |
-| **Altyapı Maliyeti** | ~$0 (statik hosting, Google Sheets API) |
+| **Altyapı Maliyeti** | ~$0 (yalnızca statik hosting) |
 | **Kullanıcı Tabanı** | Henüz bilinmiyor |
 
 ### Güçlü Yönler
 - Sıfıra yakın sunucu maliyeti
 - Çoklu platform desteği
 - Hafif, hızlı, bağımlılıksız web bileşeni (`<aripd-radyola>`)
-- Küratörlü istasyon listesi (niş değer)
+- Küratörlü istasyon listesi (niş değer) + 3.400 istasyonluk Keşfet dizini
 
 ### Zayıf Yönler
 - Kullanıcı hesabı / kimlik doğrulama yok

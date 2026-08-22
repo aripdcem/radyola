@@ -25,7 +25,7 @@
 
 ## 2. Sıfıra Yakın Altyapı Maliyeti
 
-**Ne demek:** Radyola hiçbir ses dosyası barındırmaz, radyo akışlarını yönlendirir. Hosting GitLab Pages (ücretsiz), istasyon verisi Google Sheets (ücretsiz).
+**Ne demek:** Radyola hiçbir ses dosyası barındırmaz, radyo akışlarını yönlendirir. Hosting GitLab Pages (ücretsiz), istasyon verisi depodaki bir JSON dosyası (ücretsiz).
 
 **Neden önemli:**
 - Sunucu maliyeti yok → kâra geçiş eşiği çok düşük
@@ -39,19 +39,21 @@
 
 ## 3. Çoklu Platform — Tek Kod Tabanı Yaklaşımı
 
-**Ne demek:** Web, Linux, macOS ve Windows için native uygulamalar, tek bir repository'den yönetiliyor.
+**Ne demek:** Web, Android, Linux, macOS ve Windows için native uygulamalar,
+tek bir repository'den ve tek bir veri kaynağından yönetiliyor.
 
 | Platform | Teknoloji | Dağıtım |
 |---|---|---|
 | 🌐 Web | Vanilla JS, Web Component | GitLab Pages |
+| 🤖 Android | Kotlin, Jetpack Compose, Media3 | APK |
 | 🐧 Linux | Python, GTK4, GStreamer | .deb paketi |
 | 🍎 macOS | Swift, SwiftUI, AVFoundation | Xcode |
 | 🪟 Windows | Python, pystray, pygame | .exe (PyInstaller) |
 
 **Neden önemli:**
-- Rakiplerin çoğu sadece web veya sadece mobil — Radyola masaüstünde native
-- System tray entegrasyonu → arka planda çalışır, kaynak tüketmez
-- Her platformda o platformun native araçları kullanılıyor (GTK4, SwiftUI, Win32 tray)
+- Rakiplerin çoğu ya sadece web ya sadece mobil — Radyola beşinde de native
+- Masaüstünde system tray, mobilde kilit ekranı kontrolleri → arka planda çalışır
+- Her platformda o platformun native araçları (GTK4, SwiftUI, Win32 tray, Media3)
 
 **Pazarlama mesajı:**
 > *"Tarayıcını aç ya da tray'den dinle. Her platformda, her zaman."*
@@ -101,13 +103,26 @@
 
 ## 6. Dinamik İstasyon Yönetimi
 
-**Ne demek:** İstasyon listesi Google Sheets üzerinden yönetiliyor. Yeni istasyon eklemek = tabloya satır eklemek. Kod değişikliği veya deploy gerekmez.
+**Ne demek:** İstasyon listesi uygulamaların içine gömülü değil; iki JSON
+dosyasından geliyor ve CI bunları statik olarak yayınlıyor:
+
+- `data/stations.json` — elle bakılan ~35 istasyonluk küratörlü liste
+- `data/directory.json` — radio-browser.info'dan derlenen 3.400 istasyonluk
+  Keşfet dizini (`crawler/crawler.js` üretir)
+
+Yeni istasyon eklemek = dosyaya bir kayıt eklemek. Uygulama güncellemesi
+gerekmez; kullanıcı listeyi yenilediğinde görür.
 
 **Neden önemli:**
-- Teknik bilgi gerektirmez — herhangi biri istasyon ekleyebilir
-- Anlık güncelleme — kullanıcı sayfayı yenilediğinde yeni istasyonlar görünür
-- Topluluk katkısına açık yapı (istasyon öneri formu eklenebilir)
 - Rakiplerin çoğu istasyon güncellemesi için uygulama güncellemesi gerektirir
+- İki katmanlı yapı hem küratörlük iddiasını hem de kapsamı aynı anda taşıyor
+- Dizin kalite sinyalleri taşıyor (`votes`, `bitrate`, `codec`, `lastCheckOk`) —
+  sıralama ve bozuk yayınları eleme için altyapı hazır
+- Topluluk katkısına açık: küratörlü liste bir merge request ile büyüyebilir
+
+**Not:** Güncelleme artık bir git commit'i gerektiriyor (eskiden bir tablo
+satırıydı). Teknik olmayan katkıcılar için istasyon öneri formu bu boşluğu
+kapatır — [`todo.md`](todo.md) içinde açık madde.
 
 **Pazarlama mesajı:**
 > *"Yeni istasyonlar anında. Güncelleme beklemeye gerek yok."*
