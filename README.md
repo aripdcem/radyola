@@ -10,6 +10,7 @@
 | 🐧 Linux | Python, GTK4, Libadwaita | GStreamer | D-Bus StatusNotifierItem |
 | 🪟 Windows | Python, pystray, Pillow | pygame (SDL2) | Win32 System Tray |
 | 🤖 Android | Kotlin, Jetpack Compose | Media3 (ExoPlayer) | MediaSession bildirimi |
+| 🌐 Web | Vanilla JS, Web Component | HTML5 Audio | — |
 
 ---
 

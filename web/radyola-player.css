@@ -45,6 +45,24 @@
 }
 .header p { color: #9191ab; font-size: 14px; font-weight: 400; }
 
+/* ── source toggle (Curated / Discover) ─────────────────────────── */
+.source-toggle {
+  display: flex; gap: 4px; margin-bottom: 16px;
+  padding: 4px; border-radius: 14px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+}
+.source-btn {
+  flex: 1; padding: 10px 16px; border: 0; border-radius: 10px;
+  background: transparent; color: #9191ab;
+  font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+.source-btn:hover { color: #c9c9dd; }
+.source-btn.active {
+  background: rgba(129,140,248,.18); color: #a5b4fc;
+}
+.source-btn:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
+
 /* ── search ─────────────────────────── */
 .search-wrap {
   position: relative; margin-bottom: 24px;
@@ -68,9 +86,24 @@
 }
 
 /* ── location pills ─────────────────────────── */
+/* Tek satır, yatay kaydırmalı şerit.
+   Sarmalarsa 160 ülke çipi listeyi ekranın metrelerce altına itiyordu. */
 .locations {
-  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px;
+  display: flex; flex-wrap: nowrap; gap: 8px; margin-bottom: 12px;
+  overflow-x: auto; overflow-y: hidden;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129,140,248,.35) transparent;
+  -webkit-overflow-scrolling: touch;
 }
+.locations:last-of-type { margin-bottom: 28px; }
+.locations::-webkit-scrollbar { height: 5px; }
+.locations::-webkit-scrollbar-track { background: transparent; }
+.locations::-webkit-scrollbar-thumb {
+  background: rgba(129,140,248,.3); border-radius: 3px;
+}
+.locations::-webkit-scrollbar-thumb:hover { background: rgba(129,140,248,.5); }
+.locations .loc-pill { flex: 0 0 auto; }
 .loc-pill {
   padding: 7px 16px; border-radius: 100px; border: 1px solid rgba(255,255,255,.08);
   background: rgba(255,255,255,.04); color: #9191ab; font-size: 13px; font-weight: 500;
@@ -134,6 +167,12 @@
   font-size: 15px; font-weight: 600; color: #e4e4ef;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+
+/* Bayrak, ada bitişik durmasın diye ayrı bir aralık taşır. */
+.station-flag { margin-right: 7px; }
+
+/* Kaydırdıkça sayfa ekleyen gözcü — görünmez, yalnız kesişim tetikler. */
+.list-sentinel { height: 1px; }
 .station-meta {
   display: flex; align-items: center; gap: 8px; margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

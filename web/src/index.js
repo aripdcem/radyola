@@ -1,7 +1,30 @@
 import Fuse from "fuse.js";
 
-const STATIONS_URL =
-  "https://radyola.aripd.com/data/stations.json";
+/**
+ * İki liste, aynı şema (bkz. data/README.md).
+ *
+ * Ayrı tutulmalarının sebebi: elle seçilmiş 35 istasyon 3.400'ün içinde
+ * kaybolur. Kuratörlü liste açılışta yüklenir, dizin yalnız istenirse çekilir.
+ */
+const SOURCES = {
+  curated: {
+    url: "https://radyola.aripd.com/data/stations.json",
+    label: "Curated",
+  },
+  directory: {
+    url: "https://radyola.aripd.com/data/directory.json",
+    label: "Discover",
+  },
+};
+
+/** Dizinde ilk anda basılan satır sayısı; gerisi kaydırdıkça eklenir. */
+const PAGE_SIZE = 60;
+
+/** Tür şeridinde gösterilecek en fazla tür — dizinde 438 tür var. */
+const MAX_GENRE_PILLS = 24;
+
+/** Arama, tuş vuruşu başına değil bu gecikmeyle çalışır (ms). */
+const SEARCH_DEBOUNCE = 150;
 
 /* ── helpers ─────────────────────────────────────────────── */
 function el(tag, cls, attrs) {
@@ -9,6 +32,22 @@ function el(tag, cls, attrs) {
   if (cls) e.className = cls;
   if (attrs) Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
   return e;
+}
+
+/**
+ * ISO 3166-1 alpha-2 kodunu bayrak emoji'sine çevirir: "TR" → 🇹🇷
+ * Her harf Unicode regional indicator karşılığına kaydırılır.
+ */
+function flagOf(code) {
+  if (!code || code.length !== 2 || !/^[a-z]{2}$/i.test(code)) return "";
+  return [...code.toUpperCase()]
+    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
+    .join("");
+}
+
+/** İstasyonu benzersiz kılan anahtar — iki liste arasında da çakışmaz. */
+function stationKey(s) {
+  return `${s.name}|${s.url}`;
 }
 
 /* ── CSS (loaded from external file into shadow DOM) ────── */
@@ -40,12 +79,17 @@ class AripdRadyola extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this._source = "curated";
+    this._lists = {};        // kaynak → istasyonlar (bir kez çekilir, bellekte kalır)
+    this._fuse = null;       // arama indeksi; liste başına bir kez kurulur
     this._stations = [];
     this._filtered = [];
+    this._rendered = 0;      // dizinde satırlar kaydırdıkça ekleniyor
     this._activeFilter = null;
     this._activeGenre = null;
-    this._currentIdx = -1;
+    this._currentKey = null;
     this._isPlaying = false;
+    this._searchTimer = null;
   }
 
   connectedCallback() {
@@ -65,6 +109,10 @@ class AripdRadyola extends HTMLElement {
           <div class="logo">${SVG.radio}<span>Radyola</span></div>
           <p>Curated internet radio stations from around the world</p>
         </header>
+        <div class="source-toggle" id="sourceToggle" role="tablist" aria-label="Station list">
+          <button class="source-btn active" data-source="curated" role="tab" aria-selected="true">Curated</button>
+          <button class="source-btn" data-source="directory" role="tab" aria-selected="false">Discover</button>
+        </div>
         <div class="search-wrap">
           ${SVG.search}
           <input type="text" placeholder="Search stations..." id="searchInput" aria-label="Search stations">
@@ -107,6 +155,7 @@ class AripdRadyola extends HTMLElement {
     this._elLocs = this.shadowRoot.getElementById("locationsBar");
     this._elGenres = this.shadowRoot.getElementById("genresBar");
     this._elSearch = this.shadowRoot.getElementById("searchInput");
+    this._elToggle = this.shadowRoot.getElementById("sourceToggle");
     this._elBar = this.shadowRoot.getElementById("playerBar");
     this._elPName = this.shadowRoot.getElementById("pName");
     this._elPLoc = this.shadowRoot.getElementById("pLoc");
@@ -117,6 +166,10 @@ class AripdRadyola extends HTMLElement {
 
     /* events */
     this._elSearch.addEventListener("input", () => this._onSearch());
+    this._elToggle.addEventListener("click", (e) => {
+      const btn = e.target.closest(".source-btn");
+      if (btn) this._setSource(btn.dataset.source);
+    });
     this._btnPlay.addEventListener("click", () => this._togglePlay());
     this._btnPrev.addEventListener("click", () => this._skip(-1));
     this._btnNext.addEventListener("click", () => this._skip(1));
@@ -127,29 +180,83 @@ class AripdRadyola extends HTMLElement {
   }
 
   /* ── data ─────────────────────────── */
-  async _fetchData() {
+  async _fetchData(source = this._source) {
+    // Daha önce çekilmişse ağa çıkma: kaynak geçişi anında olsun.
+    if (this._lists[source]) {
+      this._useList(source);
+      return;
+    }
+
+    this._elList.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     try {
-      const res = await fetch(STATIONS_URL);
+      const res = await fetch(SOURCES[source].url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      this._stations = json.map((r, i) => ({
-        id: i,
-        name: r.title || "",
-        url: r.url || "",
-        website: r.website || "",
-        location: r.location || "",
-        genre: r.genre || "",
-      }));
-      this._filtered = [...this._stations];
-      this._buildLocations();
-      this._buildGenres();
-      this._renderList();
+
+      const stations = json
+        .map((r) => ({
+          name: r.title || "",
+          url: r.url || "",
+          website: r.website || "",
+          location: r.location || "",
+          flag: flagOf(r.countryCode),
+          genre: r.genre || "",
+          votes: r.votes || 0,
+        }))
+        .filter((s) => s.name && s.url.startsWith("http"));
+
+      // Kuratörlü listenin sırası elle verilmiş, korunur. Dizin rastgele
+      // sırada geliyor; oy en anlamlı sıralama ölçütü.
+      if (source === "directory") stations.sort((a, b) => b.votes - a.votes);
+
+      stations.forEach((s) => {
+        s.id = stationKey(s);
+        s.search = `${s.name} ${s.location} ${s.genre}`;
+      });
+
+      this._lists[source] = stations;
+      if (this._source === source) this._useList(source);
     } catch (err) {
+      if (this._source !== source) return;
       this._elList.innerHTML = `<div class="empty-state">Failed to load stations. Please try again.</div>`;
     }
   }
 
+  /** Çekilmiş bir listeyi ekrana bağlar: filtre şeritlerini ve arama indeksini kurar. */
+  _useList(source) {
+    this._stations = this._lists[source];
+    // Fuse indeksi her tuş vuruşunda değil, liste başına bir kez kurulur —
+    // 3.400 kayıtta yeniden indekslemek aramayı hissedilir şekilde yavaşlatıyordu.
+    this._fuse = new Fuse(this._stations, {
+      keys: ["name", "location", "genre"],
+      threshold: 0.35,
+      ignoreLocation: true,
+    });
+    this._buildLocations();
+    this._buildGenres();
+    this._applyFilters();
+  }
+
+  /** Curated ↔ Discover geçişi. */
+  _setSource(source) {
+    if (this._source === source) return;
+    this._source = source;
+    this._activeFilter = null;
+    this._activeGenre = null;
+    this._elSearch.value = "";
+    this._elToggle.querySelectorAll(".source-btn").forEach((b) => {
+      const active = b.dataset.source === source;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-selected", String(active));
+    });
+    this._elSearch.placeholder =
+      source === "directory" ? "Search thousands of stations..." : "Search stations...";
+    this._fetchData(source);
+  }
+
   /* ── location filter pills ─────────────────────────── */
   _buildLocations() {
+    this._elLocs.innerHTML = "";
     const map = {};
     this._stations.forEach((s) => {
       const country = s.location.split(",").pop().trim();
@@ -182,15 +289,23 @@ class AripdRadyola extends HTMLElement {
 
   /* ── genre filter pills ─────────────────────────── */
   _buildGenres() {
-    const map = {};
+    this._elGenres.innerHTML = "";
+    const counts = {};
     this._stations.forEach((s) => {
       if (s.genre) {
         s.genre.split("/").forEach((g) => {
           const gt = g.trim();
-          if (gt) map[gt] = (map[gt] || 0) + 1;
+          if (gt) counts[gt] = (counts[gt] || 0) + 1;
         });
       }
     });
+
+    // Dizinde 438 tür var; hepsini şeride basmak onu kullanılmaz hâle getirir.
+    const map = {};
+    Object.entries(counts)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, MAX_GENRE_PILLS)
+      .forEach(([g, n]) => (map[g] = n));
 
     const allPill = el("button", "loc-pill active");
     allPill.textContent = "All Genres";
@@ -217,19 +332,18 @@ class AripdRadyola extends HTMLElement {
 
   _applyFilters() {
     const query = this._elSearch.value.trim();
-    let list = [...this._stations];
+
+    // Arama önce: hazır indeks üzerinden çalışıp sonucu daraltıyoruz. Böylece
+    // her tuş vuruşunda 3.400 kayıt yeniden indekslenmiyor.
+    let list = query.length > 0
+      ? this._fuse.search(query).map((r) => r.item)
+      : this._stations;
 
     if (this._activeFilter) {
       list = list.filter((s) => s.location.includes(this._activeFilter));
     }
-
     if (this._activeGenre) {
       list = list.filter((s) => s.genre && s.genre.includes(this._activeGenre));
-    }
-
-    if (query.length > 0) {
-      const fuse = new Fuse(list, { keys: ["name", "location", "genre"], threshold: 0.35 });
-      list = fuse.search(query).map((r) => r.item);
     }
 
     this._filtered = list;
@@ -237,20 +351,52 @@ class AripdRadyola extends HTMLElement {
   }
 
   _onSearch() {
-    this._applyFilters();
+    // Dizinde her harfte arama çalıştırmak gereksiz iş; kullanıcı durunca çalışsın.
+    clearTimeout(this._searchTimer);
+    this._searchTimer = setTimeout(() => this._applyFilters(), SEARCH_DEBOUNCE);
   }
 
   /* ── render station list ─────────────────────────── */
+  /**
+   * Listeyi baştan çizer.
+   *
+   * Dizinde 3.400 kayıt var; hepsini DOM'a basmak sayfayı dondurur. İlk sayfa
+   * çizilir, gerisi listenin sonundaki gözcü görünür oldukça eklenir.
+   */
   _renderList() {
     this._elList.innerHTML = "";
+    this._rendered = 0;
 
     if (this._filtered.length === 0) {
       this._elList.innerHTML = `<div class="empty-state">No stations found</div>`;
       return;
     }
 
-    this._filtered.forEach((s) => {
-      const row = el("div", "station" + (s.id === this._currentIdx ? " playing" : ""));
+    this._renderMore();
+  }
+
+  _renderMore() {
+    const slice = this._filtered.slice(this._rendered, this._rendered + PAGE_SIZE);
+    this._rendered += slice.length;
+    this._appendRows(slice);
+
+    this._sentinel?.remove();
+    this._sentinel = null;
+    if (this._rendered >= this._filtered.length) return;
+
+    // Gözcü görününce bir sayfa daha ekle.
+    this._sentinel = el("div", "list-sentinel");
+    this._elList.appendChild(this._sentinel);
+    this._observer ??= new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) this._renderMore();
+    });
+    this._observer.disconnect();
+    this._observer.observe(this._sentinel);
+  }
+
+  _appendRows(stations) {
+    stations.forEach((s) => {
+      const row = el("div", "station" + (s.id === this._currentKey ? " playing" : ""));
       row.dataset.id = s.id;
 
       row.innerHTML = `
@@ -259,7 +405,7 @@ class AripdRadyola extends HTMLElement {
           <div class="eq-bars"><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div></div>
         </div>
         <div class="station-info">
-          <div class="station-name">${this._esc(s.name)}</div>
+          <div class="station-name">${s.flag ? `<span class="station-flag">${s.flag}</span>` : ""}${this._esc(s.name)}</div>
           <div class="station-meta">
             <span class="station-loc">${this._esc(s.location)}</span>
             ${s.genre ? `<span class="station-genre">${this._esc(s.genre)}</span>` : ""}
@@ -281,7 +427,7 @@ class AripdRadyola extends HTMLElement {
     const s = this._stations.find((st) => st.id === id);
     if (!s) return;
 
-    this._currentIdx = id;
+    this._currentKey = id;
     this._audio.pause();
     this._audio.src = s.url;
     this._audio.load();
@@ -294,11 +440,23 @@ class AripdRadyola extends HTMLElement {
     this._btnPlay.innerHTML = SVG.pause;
     this._elBar.classList.add("visible", "is-playing");
 
-    this._renderList();
+    this._highlightPlaying();
+  }
+
+  /**
+   * Çalan satırı işaretler.
+   *
+   * Listeyi baştan çizmiyoruz: dizinde kullanıcı yüzlerce satır kaydırmış
+   * olabilir, yeniden çizim onu başa atardı.
+   */
+  _highlightPlaying() {
+    this._elList.querySelectorAll(".station").forEach((row) => {
+      row.classList.toggle("playing", row.dataset.id === this._currentKey);
+    });
   }
 
   _togglePlay() {
-    if (this._currentIdx < 0) return;
+    if (!this._currentKey) return;
     if (this._audio.paused) {
       this._audio.play().catch(() => {});
       this._isPlaying = true;
@@ -310,12 +468,12 @@ class AripdRadyola extends HTMLElement {
       this._btnPlay.innerHTML = SVG.play;
       this._elBar.classList.remove("is-playing");
     }
-    this._renderList();
+    this._highlightPlaying();
   }
 
   _skip(dir) {
     if (this._filtered.length === 0) return;
-    const curFilterIdx = this._filtered.findIndex((s) => s.id === this._currentIdx);
+    const curFilterIdx = this._filtered.findIndex((s) => s.id === this._currentKey);
     let next = curFilterIdx + dir;
     if (next < 0) next = this._filtered.length - 1;
     if (next >= this._filtered.length) next = 0;
@@ -331,6 +489,8 @@ class AripdRadyola extends HTMLElement {
   disconnectedCallback() {
     this._audio.pause();
     this._audio.src = "";
+    clearTimeout(this._searchTimer);
+    this._observer?.disconnect();
   }
 }
 
