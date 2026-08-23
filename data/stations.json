@@ -101,7 +101,7 @@
   {
     "date": "2/1/2023",
     "title": "Radyo TRT Haber",
-    "url": "https://nmicenotrt.mediatriple.net/trt_haber.aac",
+    "url": "https://trt.radyotvonline.net/trthaber",
     "website": "",
     "location": "Ankara, Türkiye",
     "countryCode": "TR",
@@ -146,7 +146,7 @@
   {
     "date": "2/1/2023",
     "title": "HABERTÜRK Radyo",
-    "url": "https://ciner-live.ercdn.net/haberturkradyo/haberturkradyo_1.m3u8",
+    "url": "https://haberturkradyo.radyotvonline.net/haberturkradyo",
     "website": "",
     "location": "İstanbul, Türkiye",
     "countryCode": "TR",
@@ -164,8 +164,8 @@
   {
     "date": "2/1/2023",
     "title": "Radyo Bozcaada",
-    "url": "http://radyobozcaada.canliyayinda.com:4000/stream",
-    "website": "",
+    "url": "https://radyobozcaada.80.yayin.com.tr/stream",
+    "website": "https://radyobozcaada.com",
     "location": "Bozcaada, Türkiye",
     "countryCode": "TR",
     "genre": "Local / Pop"

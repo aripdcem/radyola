@@ -68,8 +68,10 @@ check-streams:
   stage: check
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_PIPELINE_SOURCE == "web"
-      when: manual
+    # Zamanlamayı beklemeden elle koşturulabilsin: bir yayının gerçekten ölü mü
+    # yoksa yalnız belirli bir ağdan mı erişilemez olduğunu ancak başka bir
+    # ağdan bakarak anlıyoruz.
+    - when: manual
       allow_failure: true
   script:
     - |
