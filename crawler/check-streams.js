@@ -130,6 +130,19 @@ function firstStreamUrl(body) {
 /* ── Single request ─────────────────────────────────────────── */
 
 /**
+ * Gelen içerik ses akışı olabilir mi?
+ *
+ * Bayt akması yetmiyor: Icecast'in durum sayfası da 200 dönüp veri gönderiyor
+ * ama `text/xml`. Yanlış mount adresi verildiğinde denetleyici bunu sağlam
+ * yayın sanıyordu. Beyaz liste yerine kara liste kullanıyoruz — Icecast/Shoutcast
+ * sunucularının bir kısmı hiç content-type göndermiyor ya da
+ * `application/octet-stream` diyor.
+ */
+function looksLikeDocument(contentType) {
+  return /^(text\/(html|xml|plain)|application\/(xml|json|xhtml))/i.test(contentType.trim());
+}
+
+/**
  * Adresi açıp ilk baytların gelip gelmediğine bakar.
  *
  * Yalnız durum koduna bakmak yetmiyor: 200 dönüp hiç veri göndermeyen
@@ -187,6 +200,11 @@ function probe(url, config, redirectsLeft = 5) {
         }
 
         const contentType = res.headers["content-type"] || "";
+        if (looksLikeDocument(contentType)) {
+          res.resume();
+          done({ ok: false, reason: `not-audio(${contentType.split(";")[0].trim()})`, status });
+          return;
+        }
         res.on("data", (chunk) => {
           received += chunk.length;
           if (received >= config.minBytes) {

@@ -50,6 +50,7 @@ kapattık:
 | Anlık kesinti | Ölü ilan etmeden önce 3 deneme, aralarında 4 sn |
 | 200 dönüp veri göndermeyen sunucu | En az 512 bayt gerçekten akmalı |
 | HLS manifesti 200-300 bayt | `.m3u8` bayt sayarak değil, manifest çözümlenerek denetlenir: master ise ilk varyanta inilip segment (`#EXTINF`) aranır |
+| Icecast durum sayfası | Yanlış mount adresi 200 dönüp `text/xml` gönderiyor; içerik türü belge ise ses sayılmaz |
 | Icecast/Shoutcast standart dışı başlık | `insecureHTTPParser` — Node'un katı ayrıştırıcısı çalışan yayınları `HPE_CR_EXPECTED` ile ölü gösteriyordu |
 
 Denetleyici kendini oynatıcılarla **aynı** `User-Agent` ile tanıtır
