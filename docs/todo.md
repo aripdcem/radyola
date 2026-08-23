@@ -35,4 +35,5 @@ Monetizasyon ve pazarlama dokümanlarında tespit edilen zayıf yönler ve bunla
 ## Topluluk
 
 - [ ] **Katkı rehberi (CONTRIBUTING.md)** — Açık kaynak katkılarını kolaylaştır
+- [x] **Yayın denetimi** — `crawler/check-streams.js`, CI'da zamanlanmış çalışır; ölü yayınları raporlar
 - [ ] **İstasyon öneri formu** — Kullanıcıların istasyon önerebileceği basit bir form/issue template

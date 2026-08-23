@@ -1,14 +1,17 @@
 image: node:22-alpine
 
-# web/ veya data/ dizininde değişiklik olduğunda çalıştır
+# web/ veya data/ dizininde değişiklik olduğunda, ayrıca zamanlanmış
+# çalıştırmalarda (yayın denetimi) tetiklenir.
 workflow:
   rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
     - changes:
         - web/**/*
         - data/**/*
-    - if: $CI_PIPELINE_SOURCE == "web"
 
 stages:
+  - check
   - build
   - deploy
 
@@ -19,6 +22,10 @@ cache:
 
 build:
   stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
   script:
     - cd web
     - npm ci
@@ -44,4 +51,51 @@ pages:
     paths:
       - public
   rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ── Yayın denetimi ───────────────────────────────────────────
+# Kuratörlü liste zamanla çürüyor. Android'in tohum modelinde bu liste yeni
+# kullanıcının başlangıç noktası olduğu için temiz kalması gerekiyor.
+#
+# Zamanlanmış çalıştırma GitLab arayüzünden kurulur:
+#   Build → Pipeline schedules → New schedule  (örn. haftalık)
+#
+# Ölü yayın bulunursa iş kırmızıya döner; bildirim mekanizması budur.
+# Yumuşatmak için CI değişkeni tanımlayın: STREAM_CHECK_SOFT = "1"
+check-streams:
+  stage: check
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+      allow_failure: true
+  script:
+    - |
+      if [ "$STREAM_CHECK_SOFT" = "1" ]; then
+        node crawler/check-streams.js --json health-report.json
+      else
+        node crawler/check-streams.js --json health-report.json --fail-on-dead
+      fi
+  artifacts:
+    paths:
+      - health-report.json
+    when: always
+    expire_in: 90 days
+
+# Keşfet dizini 3.400 kayıt taşıyor; zamanlanmış çalıştırmaya sığmaz.
+# Elle tetiklenir.
+check-streams-directory:
+  stage: check
+  rules:
+    - when: manual
+  allow_failure: true
+  script:
+    - node crawler/check-streams.js --directory --concurrency 24 --attempts 2 --json health-directory.json
+  artifacts:
+    paths:
+      - health-directory.json
+    when: always
+    expire_in: 90 days
+  timeout: 2h

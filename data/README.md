@@ -24,6 +24,40 @@ Yeniden üretmek için:
 node crawler/crawler.js --all --min-votes 1000
 ```
 
+## Yayın denetimi
+
+Kuratörlü liste zamanla çürüyor: adresler taşınıyor, sunucular kapanıyor.
+Kimse bakmadığı için bu fark edilmiyordu — son ölçümde 35 kanalın 6'sı ölüydü.
+
+```bash
+node crawler/check-streams.js                  # data/stations.json
+node crawler/check-streams.js --directory      # data/directory.json (yavaş)
+node crawler/check-streams.js --json rapor.json --fail-on-dead
+```
+
+CI'da haftalık çalışması için GitLab arayüzünden bir zamanlama kurun:
+**Build → Pipeline schedules → New schedule**. Ölü yayın bulunursa iş kırmızıya
+döner; bildirim mekanizması budur. `STREAM_CHECK_SOFT=1` değişkeniyle
+yumuşatılabilir.
+
+### Yanlış alarm vermemek için
+
+Sürekli hatalı uyaran bir denetleyici görmezden gelinir. Dört tuzağı ölçüp
+kapattık:
+
+| Tuzak | Nasıl çözüldü |
+|---|---|
+| Anlık kesinti | Ölü ilan etmeden önce 3 deneme, aralarında 4 sn |
+| 200 dönüp veri göndermeyen sunucu | En az 512 bayt gerçekten akmalı |
+| HLS manifesti 200-300 bayt | `.m3u8` bayt sayarak değil, manifest çözümlenerek denetlenir: master ise ilk varyanta inilip segment (`#EXTINF`) aranır |
+| Icecast/Shoutcast standart dışı başlık | `insecureHTTPParser` — Node'un katı ayrıştırıcısı çalışan yayınları `HPE_CR_EXPECTED` ile ölü gösteriyordu |
+
+Denetleyici kendini oynatıcılarla **aynı** `User-Agent` ile tanıtır
+(`Radyola/1.0`). Kendine özel bir kimlik kullanmak yanıltıcı sonuç veriyordu:
+ITU'nun Shoutcast sunucusu denetleyiciye özel kimliği 403 ile reddederken
+oynatıcı kimliğine sorunsuz yanıt veriyor. Soru "sunucu bizi kabul ediyor mu"
+değil, "kullanıcı bu yayını çalabiliyor mu".
+
 ## Şema
 
 Her iki dosya da aynı ortak alanları taşır:
