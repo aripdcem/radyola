@@ -87,6 +87,162 @@ function countryName(code, rawName) {
   return rawName || code;
 }
 
+/* ── Genre Tags ────────────────────────────────────────────── */
+
+// radio-browser etiketleri serbest metin: aynı tür beş ayrı yazımla geliyor,
+// yanına frekans ("107.7 fm"), şehir adı ve yayıncı markası karışıyor. Ham
+// hâlleriyle 3.4 binlik dizinde 1.365 farklı etiket çıkıyor ve bunların 833'ü
+// tek bir istasyonda geçiyor — filtre olarak kullanılamaz. Aşağısı bunu toparlar.
+
+/**
+ * Yazım varyantlarını tek anahtarda birleştiren eşleştirme anahtarı.
+ * "80's" / "#80s" / "80s" → "80s";  "Hip-hop" / "Hip hop" → "hiphop"
+ */
+function tagKey(tag) {
+  return tag
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "") // "México" → "mexico", "Müzik" → "muzik"
+    .replace(/[\s\-_'’#.,!&/()\[\]]+/gu, "");
+}
+
+// Diller arası ve anlamsal birleştirmeler. Anahtar tagKey() çıktısıdır.
+// Yalnızca yüksek güvenli eşlemeler — şüphede olan etiket olduğu gibi kalır,
+// zaten frekans eşiğine takılırsa düşer.
+const TAG_SYNONYMS = {
+  // müzik
+  muzik: "Music", музыка: "Music", музика: "Music",
+  音乐: "Music", musica: "Music", musique: "Music", musik: "Music", muzyka: "Music",
+  // haber
+  haber: "News", haberler: "News", новости: "News", новини: "News",
+  新闻: "News", nachrichten: "News", noticias: "News", notizie: "News",
+  nouvelles: "News", actualites: "News",
+  // tür karşılıkları
+  рок: "Rock", поп: "Pop", turku: "Folk", halkmuzigi: "Folk",
+  этно: "Folk", ретро: "Oldies", политика: "Politics", разговорное: "Talk",
+  танцевальнаямузыка: "Dance", аудиокниги: "Audiobooks",
+  // yaygın yazım birleştirmeleri
+  hiphop: "Hip Hop", rnb: "R&B", randb: "R&B", top40: "Top 40",
+  classicrock: "Classic Rock", hardrock: "Hard Rock", deephouse: "Deep House",
+  chillout: "Chillout", easylistening: "Easy Listening",
+  adultcontemporary: "Adult Contemporary", publicradio: "Public Radio",
+  popmusic: "Pop", rockmusic: "Rock", classicalmusic: "Classical",
+  folkmusic: "Folk", dancemusic: "Dance", electronicmusic: "Electronic",
+};
+
+// Tür değil, yayıncı/platform adı olan etiketler.
+const NON_GENRE_TAGS = new Set(["mediaset", "tv", "hd", "am", "fm", "radio", "online", "livestream"]);
+
+/**
+ * Etiketin tür olmadığına karar verir.
+ *
+ * Eş anlamlı eşlemesinden SONRA çağrılmalı: "音乐" iki karakter ama
+ * eşleme onu "Music" yaptığı için buraya hiç gelmez.
+ */
+function isNoiseTag(tag) {
+  const t = tag.trim();
+  if (t.length <= 2) return true;                                 // "Ff", "Us"
+  if (t.length > 25) return true;                                 // etiket değil, cümle
+  if (/^[\d\s.,]+$/.test(t)) return true;                         // "107.7", "95.1"
+  if (/^https?:/i.test(t) || t.includes("://")) return true;      // etikete kaçmış akış adresi
+  if (/^\d{2,4}\s*[.,]?\d*\s*(fm|am|mhz|khz)$/i.test(t)) return true; // "93.3 fm"
+  if (NON_GENRE_TAGS.has(tagKey(t))) return true;
+  return false;
+}
+
+/**
+ * İstasyonun kendi şehri ya da ülkesi tür sayılmaz.
+ * radio-browser'da "Aguascalientes", "Tirana" gibi etiketler bol.
+ *
+ * Tam eşitlik yetmiyor: konum "Ciudad de México" iken etiket "Ciudad mexico"
+ * olarak geliyor. Bu yüzden etiketin BÜTÜN kelimeleri konumda geçiyorsa yer
+ * adı sayıyoruz. Kapsama tek yönlü: "Mexico city" (city konumda yok) ve
+ * "Türkü" (Türkiye'nin kelimesi değil) tür olarak kalır.
+ */
+function isOwnPlaceName(tag, station) {
+  const words = (text) =>
+    text
+      .split(/[\s,]+/)
+      .map(tagKey)
+      .filter((w) => w.length >= 3);
+
+  const tagWords = words(tag);
+  if (tagWords.length === 0) return false;
+  const placeWords = new Set(words(station.location));
+  return tagWords.every((w) => placeWords.has(w));
+}
+
+/**
+ * İstasyon adından yayıncı ailesini çıkarır: "181.FM - 80's Country" → "181.fm"
+ *
+ * Bir ağın tüm kanalları aynı önekle geliyor; tür etiketini kaç ayrı yayıncının
+ * kullandığını sayabilmek için gerekiyor.
+ */
+function broadcasterFamily(title) {
+  return tagKey(title.split(/[-–|:]/)[0]) || tagKey(title);
+}
+
+/**
+ * Tüm crawl bittikten sonra tür alanlarını yeniden kurar.
+ *
+ * Frekans eşiği ancak bütün veri elde olunca uygulanabildiği için bu iş
+ * istasyon bazında değil, toplu yapılıyor: önce her etiket normalize edilip
+ * sayılıyor, sonra [minCount] altında kalanlar atılıyor.
+ *
+ * Görünen etiket olarak en sık rastlanan yazım seçilir — 1.365 etikete elle
+ * isim vermek yerine veriye bakıyoruz.
+ */
+function finalizeGenres(stations, minCount) {
+  const totals = new Map();    // tagKey → toplam görülme
+  const labels = new Map();    // tagKey → Map<görünen yazım, kaç kez>
+  const families = new Map();  // tagKey → Set<yayıncı ailesi>
+
+  const cleanedPerStation = stations.map((station) => {
+    const seen = new Set();
+    const kept = [];
+    for (const raw of station._meta.tags) {
+      const synonym = TAG_SYNONYMS[tagKey(raw)];
+      const tag = synonym || raw;
+      if (isNoiseTag(tag) || isOwnPlaceName(tag, station)) continue;
+      const key = tagKey(tag);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      kept.push({ key, label: tag });
+      totals.set(key, (totals.get(key) || 0) + 1);
+      const family = families.get(key) || new Set();
+      family.add(broadcasterFamily(station.title));
+      families.set(key, family);
+      const byLabel = labels.get(key) || new Map();
+      byLabel.set(tag, (byLabel.get(tag) || 0) + 1);
+      labels.set(key, byLabel);
+    }
+    return kept;
+  });
+
+  const canonical = new Map();
+  for (const [key, byLabel] of labels) {
+    const best = [...byLabel.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    canonical.set(key, best);
+  }
+
+  // Gerçek bir tür birden çok yayıncıda görünür. Tek yayıncıya sıkışmış etiket
+  // marka ya da yer adıdır: "181.FM - …" ağının 34 kanalı "Waynesboro" (şehirleri)
+  // etiketini taşıyor ve sırf sayıca eşiği geçiyordu.
+  const isGenre = (key) =>
+    totals.get(key) >= minCount && families.get(key).size >= 2;
+
+  stations.forEach((station, i) => {
+    const kept = cleanedPerStation[i].filter((t) => isGenre(t.key));
+    station.genre = kept.slice(0, 3).map((t) => canonical.get(t.key)).join(" / ");
+  });
+
+  const surviving = [...totals.keys()].filter(isGenre).length;
+  const brandLike = [...totals.keys()].filter(
+    (k) => totals.get(k) >= minCount && families.get(k).size < 2
+  ).length;
+  return { surviving, discarded: totals.size - surviving, brandLike };
+}
+
 /* ── CLI Argument Parsing ──────────────────────────────────── */
 
 function parseArgs() {
@@ -97,6 +253,7 @@ function parseArgs() {
     minVotes: 0,
     workingOnly: true,
     limit: 0, // 0 = no limit
+    minTagCount: 3, // bu sayıdan az geçen tür etiketleri elenir
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -119,6 +276,9 @@ function parseArgs() {
       case "--limit":
         config.limit = parseInt(args[++i], 10) || 0;
         break;
+      case "--min-tag-count":
+        config.minTagCount = parseInt(args[++i], 10) || 0;
+        break;
       case "--help":
         console.log(`
 Radyola Crawler - radio-browser.info'dan radyo istasyonları çeker
@@ -133,6 +293,7 @@ Seçenekler:
   --working-only         Sadece çalışan istasyonlar (varsayılan)
   --include-broken       Bozuk istasyonları da dahil et
   --limit N              Ülke başına maksimum istasyon sayısı
+  --min-tag-count N      Bu sayıdan az geçen tür etiketlerini ele (varsayılan: 3)
   --help                 Bu yardım mesajını gösterir
 `);
         process.exit(0);
@@ -226,16 +387,15 @@ function transformStation(station) {
   const country = countryName(station.countrycode, station.country);
   const location = city ? `${city}, ${country}` : country;
 
-  // Tags → genre (capitalize, clean up)
-  const genre = station.tags
-    ? station.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean)
-        .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
-        .slice(0, 3) // Max 3 genres
-        .join(" / ")
-    : "";
+  // Ham etiketler _meta'da taşınır; tür alanı crawl bitince finalizeGenres()
+  // tarafından kurulur — frekans eşiği ancak bütün veri elde olunca uygulanabiliyor.
+  // Ayraç yalnız virgül değil: "R&b/urban", "Alternative / indie" gibi etiketler
+  // tek parça gelirse tür alanının kendi ayracıyla ("/") çakışıp faseti bozuyor.
+  const tags = (station.tags || "")
+    .split(/[,/;|]/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => t.charAt(0).toUpperCase() + t.slice(1));
 
   return {
     // Radyola ortak alanları — data/stations.json ile aynı şema
@@ -247,10 +407,11 @@ function transformStation(station) {
     // Bayrak emoji'si ada değil koda bakılarak türetilsin diye: her platform
     // iki harfi regional indicator'a çevirebiliyor, 164 satırlık ad tablosu gerekmiyor.
     countryCode: station.countrycode || "",
-    genre: genre,
+    genre: "", // finalizeGenres() dolduruyor
 
     // Extended fields (JSON only)
     _meta: {
+      tags,
       stationuuid: station.stationuuid,
       countrycode: station.countrycode,
       language: station.language || "",
@@ -330,7 +491,7 @@ async function main() {
       const transformed = stations.map(transformStation);
       allStations.push(...transformed);
 
-      const withGenre = transformed.filter((s) => s.genre).length;
+      const withGenre = transformed.filter((s) => s._meta.tags.length > 0).length;
       const withCoords = transformed.filter(
         (s) => s._meta.geo_lat && s._meta.geo_long
       ).length;
@@ -364,7 +525,8 @@ async function main() {
   const uniqueMap = new Map();
   allStations.forEach((s) => {
     const key = s.url.toLowerCase();
-    if (!uniqueMap.has(key) || (uniqueMap.get(key).genre === "" && s.genre !== "")) {
+    // Tür alanı bu aşamada henüz boş; etiketi olan kaydı tercih ediyoruz.
+    if (!uniqueMap.has(key) || (uniqueMap.get(key)._meta.tags.length === 0 && s._meta.tags.length > 0)) {
       uniqueMap.set(key, s);
     }
   });
@@ -377,6 +539,18 @@ async function main() {
     if (a.location > b.location) return 1;
     return (b._meta.clickcount || 0) - (a._meta.clickcount || 0);
   });
+
+  // ── Tür etiketlerini toparla ──
+  const tagStats = finalizeGenres(uniqueStations, config.minTagCount);
+  const withGenre = uniqueStations.filter((s) => s.genre).length;
+  console.log(
+    `🏷️  Tür etiketleri: ${tagStats.surviving} tür kaldı, ${tagStats.discarded} elendi ` +
+      `(${config.minTagCount} kezden az geçen + ${tagStats.brandLike} marka/yer adı)`
+  );
+  console.log(
+    `    Türü olan istasyon: ${withGenre}/${uniqueStations.length} ` +
+      `(%${Math.round((100 * withGenre) / uniqueStations.length)})`
+  );
 
   // ── Write CSV (Radyola Google Sheets format) ──
   const csvData = toCSV(uniqueStations);

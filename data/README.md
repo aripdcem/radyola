@@ -41,6 +41,28 @@ Her iki dosya da aynı ortak alanları taşır:
 `directory.json` ayrıca kalite alanları taşır: `votes`, `bitrate`, `codec`,
 `hls`, `lastCheckOk`. Sıralama ve bozuk yayınları eleme için kullanılır.
 
+### Tür etiketleri nasıl temizleniyor
+
+radio-browser etiketleri serbest metin: aynı tür beş ayrı yazımla geliyor,
+yanına frekans (`107.7 fm`), şehir adı ve yayıncı markası karışıyor. Ham hâlde
+1.365 farklı etiket çıkıyor ve 833'ü tek bir istasyonda geçiyor — filtre olarak
+kullanılamaz. Crawler dört aşamada toparlıyor:
+
+1. **Normalize** — büyük/küçük harf, aksan, noktalama ve ayraç farkları silinir.
+   `80's` / `#80s` / `80s` aynı etiket olur; `R&b/urban` iki etikete bölünür.
+2. **Eş anlamlı eşleme** — diller arası birleştirme: `Müzik`/`Музыка`/`音乐` → `Music`,
+   `Haber`/`Новости`/`Nachrichten` → `News`, `Türkü` → `Folk`.
+3. **Gürültü eleme** — frekanslar, salt rakamlar, iki karakterden kısa ve 25
+   karakterden uzun etiketler, akış adresleri, yayıncı adları. Etiketin bütün
+   kelimeleri istasyonun kendi konumunda geçiyorsa yer adıdır, atılır.
+4. **Eşik** — `--min-tag-count` (varsayılan 3) altında kalan etiketler ve tek bir
+   yayıncıya sıkışmış etiketler elenir. İkincisi marka/yer adlarını yakalar:
+   `181.FM` ağının 34 kanalı şehirleri `Waynesboro`'yu tür sanıyordu.
+
+Sonuç: **438 tür**, istasyonların %72'sinde tür bilgisi var. Kuyrukta hâlâ birkaç
+şehir/marka adı var (`Cdmx`, `Acir`); onları tamamen ayıklamak yer adı sözlüğü
+gerektirir.
+
 ### `countryCode` neden var
 
 Bayrak emoji'si ülke **adından** değil kodundan türetilmeli. radio-browser'ın
