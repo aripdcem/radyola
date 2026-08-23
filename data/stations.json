@@ -90,15 +90,6 @@
     "genre": "Pop / Hit"
   },
   {
-    "date": "11/10/2023",
-    "title": "LOUNGE FM 96",
-    "url": "https://sc.vargonen.net:5003/;?type=http&nocache=6836",
-    "website": "https://www.loungefm.net",
-    "location": "İstanbul, Türkiye",
-    "countryCode": "TR",
-    "genre": "Lounge / Chill"
-  },
-  {
     "date": "2/1/2023",
     "title": "Radyo TRT Haber",
     "url": "https://trt.radyotvonline.net/trthaber",
@@ -187,15 +178,6 @@
     "location": "İstanbul, Türkiye",
     "countryCode": "TR",
     "genre": "Pop / Rock"
-  },
-  {
-    "date": "2/1/2023",
-    "title": "Μινόρε Καλλονής, Kalloni, Greece",
-    "url": "https://i4.streams.ovh:2200/ssl/minore?mp=/stream",
-    "website": "",
-    "location": "Kalloni, Greece",
-    "countryCode": "GR",
-    "genre": "Greek Music"
   },
   {
     "date": "12/19/2023 16:00:12",
@@ -306,12 +288,21 @@
     "genre": "Jazz"
   },
   {
-    "date": "BBC Radio 6 Music",
+    "date": "5/13/2026",
     "title": "BBC Radio 6 Music",
     "url": "http://lsn.lv/bbcradio.m3u8?station=bbc_6music&bitrate=96000",
     "website": "https://www.bbc.co.uk/6music",
     "location": "London, United Kingdom",
     "countryCode": "GB",
     "genre": "Alternative"
+  },
+  {
+    "date": "8/23/2026",
+    "title": "LoungeFM",
+    "url": "https://s35.derstream.net/ukwwien.mp3?ref=web",
+    "website": "https://www.lounge.fm",
+    "location": "Vienna, Austria",
+    "countryCode": "AT",
+    "genre": "Lounge / Chill"
   }
 ]
