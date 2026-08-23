@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aripd.radyola.MainViewModel
 import com.aripd.radyola.UiState
@@ -61,6 +63,9 @@ import com.aripd.radyola.ui.theme.RadyolaPink
 fun RadyolaScreen(state: UiState, viewModel: MainViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showSettings by remember { mutableStateOf(false) }
+    var showAddStation by remember { mutableStateOf(false) }
+    var addError by remember { mutableStateOf<String?>(null) }
+    var curatedResult by remember { mutableStateOf<String?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(state.errorMessage) {
@@ -108,6 +113,10 @@ fun RadyolaScreen(state: UiState, viewModel: MainViewModel) {
             ) {
                 item {
                     Header(
+                        onAddStation = {
+                            addError = null
+                            showAddStation = true
+                        },
                         onOpenSettings = { showSettings = true },
                         onRefresh = viewModel::loadStations
                     )
@@ -115,9 +124,9 @@ fun RadyolaScreen(state: UiState, viewModel: MainViewModel) {
 
                 item {
                     SourceToggle(
-                        source = state.source,
+                        mode = state.mode,
                         directoryLoading = state.directoryLoading,
-                        onSelect = viewModel::setSource
+                        onSelect = viewModel::setMode
                     )
                 }
 
@@ -137,24 +146,30 @@ fun RadyolaScreen(state: UiState, viewModel: MainViewModel) {
                     FilterSection(
                         state = state,
                         onCountrySelected = viewModel::selectCountry,
-                        onGenreSelected = viewModel::selectGenre,
-                        onToggleFavorites = viewModel::toggleFavoritesOnly
+                        onGenreSelected = viewModel::selectGenre
                     )
                 }
 
                 if (state.isLoading && state.visible.isEmpty()) {
                     item { LoadingRow() }
                 } else if (state.visible.isEmpty()) {
-                    item { EmptyState(hasFilters = state.hasFilters, onClear = viewModel::clearFilters) }
+                    item {
+                        EmptyState(
+                            hasFilters = state.hasFilters,
+                            isDiscovering = state.isDiscovering,
+                            onClear = viewModel::clearFilters
+                        )
+                    }
                 } else {
                     items(state.visible, key = { it.id }) { station ->
                         StationRow(
                             station = station,
                             isCurrent = station.id == state.current?.id,
                             isPlaying = state.isPlaying && station.id == state.current?.id,
-                            isFavorite = station.id in state.settings.favorites,
+                            inMyList = station.id in state.myListIds,
+                            isDiscovering = state.isDiscovering,
                             onClick = { viewModel.play(station) },
-                            onToggleFavorite = { viewModel.toggleFavorite(station) }
+                            onToggleInMyList = { viewModel.toggleInMyList(station) }
                         )
                     }
                 }
@@ -164,9 +179,26 @@ fun RadyolaScreen(state: UiState, viewModel: MainViewModel) {
         StatusBarScrim(Modifier.align(Alignment.TopCenter))
     }
 
+    if (showAddStation) {
+        AddStationDialog(
+            verifying = state.verifyingStation,
+            errorMessage = addError,
+            knownGenres = state.genres,
+            onDismiss = { showAddStation = false },
+            onSubmit = { name, url, city, countryCode, genre ->
+                addError = null
+                viewModel.addManualStation(name, url, city, countryCode, genre) { result ->
+                    result
+                        .onSuccess { showAddStation = false }
+                        .onFailure { addError = it.message ?: "Kanal eklenemedi" }
+                }
+            }
+        )
+    }
+
     if (showSettings) {
         ModalBottomSheet(
-            onDismissRequest = { showSettings = false },
+            onDismissRequest = { showSettings = false; curatedResult = null },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface
         ) {
@@ -174,7 +206,13 @@ fun RadyolaScreen(state: UiState, viewModel: MainViewModel) {
                 state = state,
                 onRememberChanged = viewModel::setRememberStation,
                 onAutoplayChanged = viewModel::setAutoplayOnStart,
-                onSleepTimerSelected = viewModel::setSleepTimer
+                onSleepTimerSelected = viewModel::setSleepTimer,
+                onFetchCurated = {
+                    viewModel.addNewCuratedStations { added ->
+                        curatedResult = if (added > 0) "$added kanal eklendi" else "Yeni kanal yok"
+                    }
+                },
+                curatedResult = curatedResult
             )
         }
     }
@@ -224,12 +262,23 @@ private fun AmbientBackground() {
 }
 
 @Composable
-private fun Header(onOpenSettings: () -> Unit, onRefresh: () -> Unit) {
+private fun Header(
+    onAddStation: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onRefresh: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         BrandTitle(Modifier.weight(1f))
+        IconButton(onClick = onAddStation) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "Kanal ekle",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         IconButton(onClick = onRefresh) {
             Icon(
                 Icons.Default.Refresh,
@@ -258,13 +307,17 @@ private fun LoadingRow() {
 }
 
 @Composable
-private fun EmptyState(hasFilters: Boolean, onClear: () -> Unit) {
+private fun EmptyState(hasFilters: Boolean, isDiscovering: Boolean, onClear: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = if (hasFilters) "Bu filtrelerle istasyon bulunamadı" else "İstasyon listesi boş",
+            text = when {
+                hasFilters -> "Bu filtrelerle istasyon bulunamadı"
+                isDiscovering -> "Keşfet dizini yüklenemedi"
+                else -> "Listeniz boş — Keşfet'ten istasyon ekleyin"
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -305,7 +358,10 @@ private fun BrandTitle(modifier: Modifier = Modifier) {
             Text(
                 "Dünyadan seçme internet radyoları",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Başlıkta üç ikon var; dar ekranda alt satıra taşmasın.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

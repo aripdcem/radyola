@@ -15,8 +15,12 @@ import com.aripd.radyola.data.AppSettings
 import com.aripd.radyola.data.RadioStation
 import com.aripd.radyola.data.SettingsStore
 import com.aripd.radyola.data.StationRepository
+import com.aripd.radyola.data.Countries
+import com.aripd.radyola.data.ListMode
 import com.aripd.radyola.data.StationSource
+import com.aripd.radyola.data.UserListStore
 import com.aripd.radyola.player.PlaylistResolver
+import com.aripd.radyola.player.StreamProbe
 import com.aripd.radyola.player.RadyolaPlaybackService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -25,13 +29,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** Uygulamanın tüm ekran durumu. */
 data class UiState(
-    val source: StationSource = StationSource.CURATED,
+    val mode: ListMode = ListMode.MY_LIST,
     val directoryLoading: Boolean = false,
+    /** Elle eklenen adres doğrulanırken true. */
+    val verifyingStation: Boolean = false,
+    /** Kullanıcı listesindeki kimlikler — Keşfet'te "ekli mi" göstergesi. */
+    val myListIds: Set<String> = emptySet(),
     val stations: List<RadioStation> = emptyList(),
     val visible: List<RadioStation> = emptyList(),
     val countries: List<String> = emptyList(),
@@ -39,7 +48,6 @@ data class UiState(
     val query: String = "",
     val selectedCountry: String? = null,
     val selectedGenre: String? = null,
-    val favoritesOnly: Boolean = false,
     val isLoading: Boolean = true,
     val current: RadioStation? = null,
     val isPlaying: Boolean = false,
@@ -51,16 +59,17 @@ data class UiState(
     val sleepTimerRemainingSec: Int = 0
 ) {
     val hasFilters: Boolean
-        get() = query.isNotBlank() || selectedCountry != null || selectedGenre != null || favoritesOnly
+        get() = query.isNotBlank() || selectedCountry != null || selectedGenre != null
 
     val isDiscovering: Boolean
-        get() = source == StationSource.DIRECTORY
+        get() = mode == ListMode.DISCOVER
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = StationRepository(application)
     private val settingsStore = SettingsStore(application)
+    private val userList = UserListStore(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -70,8 +79,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var sleepTimerJob: Job? = null
     private var pendingAutoplayId: String? = null
 
-    // Mod değiştikçe yeniden çekmemek için her iki liste de bellekte tutulur.
-    private val loaded = mutableMapOf<StationSource, List<RadioStation>>()
+    // Keşfet dizini bir kez çekilip bellekte tutulur; mod geçişi ağa çıkmasın.
+    private var directory: List<RadioStation>? = null
 
     // Oynatıcıya verilen sıra. Keşfet'te görünen liste 3.400 kayıt olabiliyor;
     // hepsini MediaItem'a çevirmek yerine seçilen istasyonun çevresinden bir
@@ -81,7 +90,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         connectToPlayer()
         observeSettings()
-        loadStations()
+        bootstrapMyList()
     }
 
     // ── oynatıcı bağlantısı ──────────────────────────────────
@@ -153,50 +162,171 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Ekrandaki listeyi tazeler — hangi mod açıksa o kaynağı yeniden çeker. */
-    fun loadStations() = loadSource(_uiState.value.source, forceRefresh = true)
+    /** Ekrandaki listeyi tazeler — hangi mod açıksa onu yeniden yükler. */
+    fun loadStations() {
+        when (_uiState.value.mode) {
+            ListMode.MY_LIST -> viewModelScope.launch { publishMyList() }
+            ListMode.DISCOVER -> loadDirectory(forceRefresh = true)
+        }
+    }
 
-    private fun loadSource(source: StationSource, forceRefresh: Boolean = false) {
+    /**
+     * İlk açılış: kullanıcı listesi yoksa kuratörlü listeden tohumlanır.
+     *
+     * Tohum bir kez atılır. Ağ yoksa gömülü yedek kullanılır — kullanıcıyı
+     * boş bir ekranla karşılamamak için; sonraki açılışta gerçek tohum gelmez,
+     * ama ayarlardaki "yeni kanallara bak" farkı kapatır.
+     */
+    private fun bootstrapMyList() {
+        viewModelScope.launch {
+            userList.load()
+            if (!userList.isSeeded()) {
+                _uiState.update { it.copy(isLoading = true) }
+                userList.seed(repository.load(StationSource.CURATED))
+                userList.load()
+            }
+            publishMyList()
+            _uiState.update { it.copy(isLoading = false) }
+            maybeAutoplay()
+            preResolvePlaylists(userList.stations.value)
+            migrateLegacyFavorites()
+        }
+    }
+
+    /**
+     * Eski favori kümesini kullanıcı listesine taşır.
+     *
+     * Favoriler yalnız kimlik saklıyordu. Kuratörlü olanlar zaten tohumda var;
+     * asıl risk Keşfet'ten yıldızlananlar — meta verileri hiçbir yerde yok, o
+     * yüzden dizin bir kez çekilip eşleştiriliyor. Taşıma bitince küme silinir,
+     * böylece bir daha çalışmaz.
+     */
+    private suspend fun migrateLegacyFavorites() {
+        val legacy = settingsStore.settings.first().favorites
+        if (legacy.isEmpty()) return
+        val missing = legacy - userList.ids
+        if (missing.isNotEmpty()) {
+            val pool = directory ?: repository.load(StationSource.DIRECTORY).also { directory = it }
+            pool.filter { it.id in missing }.forEach { userList.add(it) }
+            userList.load()
+            publishMyList()
+        }
+        settingsStore.clearFavorites()
+    }
+
+    private fun publishMyList() {
+        publishStations(ListMode.MY_LIST, userList.stations.value)
+        _uiState.update { it.copy(myListIds = userList.ids) }
+    }
+
+    private fun loadDirectory(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             if (!forceRefresh) {
-                // Daha önce çekilmişse ağa hiç çıkma: mod geçişi anında olsun.
-                loaded[source]?.let { publishStations(source, it); return@launch }
+                directory?.let { publishStations(ListMode.DISCOVER, it); return@launch }
             }
-            _uiState.update {
-                if (source == StationSource.DIRECTORY) it.copy(directoryLoading = true)
-                else it.copy(isLoading = true)
+            _uiState.update { it.copy(directoryLoading = true) }
+            repository.cached(StationSource.DIRECTORY)?.let {
+                publishStations(ListMode.DISCOVER, it)
             }
-
-            // Önce önbellek: liste anında görünsün, ağ yavaşsa da ekran boş kalmasın.
-            repository.cached(source)?.let { cached -> publishStations(source, cached) }
-
-            val stations = repository.load(source)
-            loaded[source] = stations
-            publishStations(source, stations)
-            _uiState.update { it.copy(isLoading = false, directoryLoading = false) }
-
-            if (source == StationSource.CURATED) {
-                maybeAutoplay()
-                // Keşfet dizininde 3.400 kayıt var; hepsini önden çözmek anlamsız,
-                // çalma anındaki tekil çözüm yeterli.
-                preResolvePlaylists(stations)
-            }
+            val stations = repository.load(StationSource.DIRECTORY)
+            directory = stations
+            publishStations(ListMode.DISCOVER, stations)
+            _uiState.update { it.copy(directoryLoading = false) }
         }
     }
 
-    /** Seçkiler ↔ Keşfet geçişi. Dizin ilk geçişte çekilir, sonra bellekten gelir. */
-    fun setSource(source: StationSource) {
-        if (_uiState.value.source == source) return
+    /** Listem ↔ Keşfet geçişi. */
+    fun setMode(mode: ListMode) {
+        if (_uiState.value.mode == mode) return
         _uiState.update {
-            it.copy(source = source, query = "", selectedCountry = null, selectedGenre = null)
+            it.copy(mode = mode, query = "", selectedCountry = null, selectedGenre = null)
         }
-        loadSource(source)
+        when (mode) {
+            ListMode.MY_LIST -> viewModelScope.launch { publishMyList() }
+            ListMode.DISCOVER -> loadDirectory()
+        }
     }
 
-    private fun publishStations(source: StationSource, stations: List<RadioStation>) {
+    /**
+     * Elle girilen istasyonu doğrulayıp listeye ekler.
+     *
+     * Adres kaydedilmeden önce gerçekten çalınabiliyor mu diye deneniyor:
+     * yazım hatası aksi hâlde sessiz bir başarısızlığa dönüşüyor, kullanıcı
+     * da kanalın neden çalmadığını anlayamıyor. `.pls`/`.m3u` ise çözülüp
+     * çözülen adres saklanıyor.
+     */
+    fun addManualStation(
+        name: String,
+        url: String,
+        city: String,
+        countryCode: String,
+        genre: String,
+        onResult: (Result<RadioStation>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val trimmedName = name.trim()
+            val trimmedUrl = url.trim()
+            if (trimmedName.isEmpty()) {
+                onResult(Result.failure(IllegalArgumentException("İstasyon adı boş olamaz")))
+                return@launch
+            }
+            if (!trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://")) {
+                onResult(Result.failure(IllegalArgumentException("Adres http:// veya https:// ile başlamalı")))
+                return@launch
+            }
+
+            _uiState.update { it.copy(verifyingStation = true) }
+            val resolved = if (PlaylistResolver.needsResolving(trimmedUrl)) {
+                PlaylistResolver.resolve(trimmedUrl)
+            } else {
+                trimmedUrl
+            }
+            val reachable = StreamProbe.canPlay(resolved)
+            _uiState.update { it.copy(verifyingStation = false) }
+
+            if (!reachable) {
+                onResult(Result.failure(IllegalStateException("Bu adresten yayın alınamadı")))
+                return@launch
+            }
+
+            // Konum "Şehir, Ülke" biçiminde kurulur; ülke adı seçilen koddan
+            // gelir, böylece ülke şeridi elle yazımla parçalanmaz.
+            val country = Countries.nameOf(countryCode)
+            val station = RadioStation(
+                name = trimmedName,
+                url = trimmedUrl,
+                location = listOf(city.trim(), country).filter { it.isNotEmpty() }.joinToString(", "),
+                countryCode = countryCode,
+                genre = genre.trim()
+            )
+            userList.add(station)
+            userList.load()
+            _uiState.update { it.copy(myListIds = userList.ids) }
+            if (_uiState.value.mode == ListMode.MY_LIST) publishMyList()
+            onResult(Result.success(station))
+        }
+    }
+
+    /**
+     * Yıldız düğmesi: Keşfet'te "listeme ekle", Listem'de "çıkar".
+     *
+     * Ayrı bir favori kümesi tutmuyoruz — liste zaten kullanıcının seçtikleri.
+     */
+    fun toggleInMyList(station: RadioStation) {
+        viewModelScope.launch {
+            userList.toggle(station)
+            _uiState.update { it.copy(myListIds = userList.ids) }
+            if (_uiState.value.mode == ListMode.MY_LIST) publishMyList()
+        }
+    }
+
+    /**
+     * Listeyi ekrana bağlar: ülke ve tür şeritlerini kurar, filtreleri uygular.
+     */
+    private fun publishStations(mode: ListMode, stations: List<RadioStation>) {
         val countries = stations.map { it.country }.distinct().sorted()
 
-        // Kuratörlü listede birkaç tür var, hepsi çipe sığar. Dizinde 438 tür
+        // Kullanıcı listesinde birkaç tür var, hepsi çipe sığar. Dizinde 438 tür
         // var; en sık geçenler dışını göstermek şeridi kullanılmaz hâle getirir.
         val genreCounts = stations
             .flatMap { it.genre.split("/") }
@@ -211,7 +341,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .sorted()
 
         _uiState.update {
-            if (it.source != source) it // kullanıcı beklerken mod değiştirdi
+            if (it.mode != mode) it // kullanıcı beklerken mod değiştirdi
             else it.copy(stations = stations, countries = countries, genres = genres)
         }
         applyFilters()
@@ -221,7 +351,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun maybeAutoplay() {
         val state = _uiState.value
         if (!state.settings.autoplayOnStart || state.current != null) return
-        val station = stationById(state.settings.lastStationId) ?: return
+        val station = userList.stations.value.firstOrNull { it.id == state.settings.lastStationId }
+            ?: return
         if (controller == null) pendingAutoplayId = station.id else play(station)
     }
 
@@ -261,14 +392,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         applyFilters()
     }
 
-    fun toggleFavoritesOnly() {
-        _uiState.update { it.copy(favoritesOnly = !it.favoritesOnly) }
-        applyFilters()
-    }
-
     fun clearFilters() {
         _uiState.update {
-            it.copy(query = "", selectedCountry = null, selectedGenre = null, favoritesOnly = false)
+            it.copy(query = "", selectedCountry = null, selectedGenre = null)
         }
         applyFilters()
     }
@@ -279,7 +405,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val filtered = state.stations.filter { station ->
                 (state.selectedCountry == null || station.country == state.selectedCountry) &&
                     (state.selectedGenre == null || station.genre.contains(state.selectedGenre, true)) &&
-                    (!state.favoritesOnly || station.id in state.settings.favorites) &&
                     (query.isEmpty() || station.searchText.contains(query, ignoreCase = true))
             }
             // Kuratörlü listenin sırası elle verilmiş, korunur. Dizinde 3.400 kayıt
@@ -409,16 +534,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── favoriler & ayarlar ──────────────────────────────────
 
-    fun toggleFavorite(station: RadioStation) {
-        viewModelScope.launch { settingsStore.toggleFavorite(station.id) }
-    }
-
     fun setRememberStation(value: Boolean) {
         viewModelScope.launch { settingsStore.setRememberStation(value) }
     }
 
     fun setAutoplayOnStart(value: Boolean) {
         viewModelScope.launch { settingsStore.setAutoplayOnStart(value) }
+    }
+
+    /**
+     * Kuratörlü listede olup kullanıcıda olmayanları ekler.
+     *
+     * Tohum bir kez atıldığı için sonradan eklenen kanallar kullanıcıya
+     * ulaşmıyor. Bunu sessizce yapmıyoruz — kullanıcının bilerek çıkardığı
+     * bir istasyon geri gelmemeli, bu yüzden yalnız istendiğinde çalışır.
+     */
+    fun addNewCuratedStations(onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            val curated = repository.load(StationSource.CURATED)
+            val missing = userList.missingFrom(curated)
+            missing.forEach { userList.add(it) }
+            if (missing.isNotEmpty()) {
+                userList.load()
+                _uiState.update { it.copy(myListIds = userList.ids) }
+                if (_uiState.value.mode == ListMode.MY_LIST) publishMyList()
+            }
+            onResult(missing.size)
+        }
     }
 
     fun dismissError() = _uiState.update { it.copy(errorMessage = null) }

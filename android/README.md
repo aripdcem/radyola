@@ -4,15 +4,16 @@ Jetpack Compose + Media3 (ExoPlayer) tabanlı internet radyo çalar.
 
 ## Özellikler
 
-- **İki liste** — *Seçkiler* (elle bakılan ~35 istasyon, açılışta yüklenir) ve
-  *Keşfet* (~3.400 istasyonluk dizin, ilk geçişte çekilir). İkisi de diğer
-  platformlarla ortak JSON kaynağından gelir; ağ yoksa disk önbelleği,
-  o da yoksa gömülü varsayılan liste
+- **Listem** — kullanıcının kendi listesi. İlk açılışta kuratörlü listeden
+  (`data/stations.json`) bir kez **tohumlanır**, sonra tamamen kullanıcıya
+  aittir: kanal eklenir, çıkarılır, üzerine yazılmaz
+- **Keşfet** — ~3.400 istasyonluk dizin, ilk geçişte çekilir
+- **Elle kanal ekleme** — dizinde olmayan yerel/niş yayınlar için. Adres
+  kaydedilmeden önce denenir; ülke ve tür seçim listesinden gelir
 - **Arka planda çalma** — `MediaSessionService` ile ön plan servisi; bildirim,
   kilit ekranı kontrolleri ve kulaklık medya tuşları
 - **Arama ve filtreler** — ad / konum / tür üzerinde arama, ülke ve tür seçicileri.
   Keşfet'te liste oya göre sıralanır ve tür çipleri en sık 24 türle sınırlanır
-- **Favoriler** — DataStore'da kalıcı
 - **Uyku zamanlayıcı** — 15 / 30 / 45 / 60 / 90 dakika
 - **Ayarlar** — son istasyonu hatırla, açılışta otomatik çal
 - **Ses odağı** — arama gelince duraklar, kulaklık çıkınca susar
@@ -77,7 +78,9 @@ com.aripd.radyola
 ├── MainViewModel.kt             Tüm ekran durumu, MediaController köprüsü
 ├── data/
 │   ├── RadioStation.kt          Model, ülke/şehir/bayrak türetmeleri
-│   ├── StationRepository.kt     İki kaynak (Seçkiler/Keşfet), çekme + önbellek
+│   ├── StationRepository.kt     Uzak listeler (tohum + Keşfet), çekme + önbellek
+│   ├── UserListStore.kt         Listem — yerel, kullanıcıya ait
+│   ├── Countries.kt             Elle eklemede ülke seçimi
 │   └── SettingsStore.kt         DataStore: ayarlar ve favoriler
 ├── player/
 │   ├── RadyolaPlaybackService.kt  MediaSessionService (ön plan servisi)
@@ -96,6 +99,27 @@ com.aripd.radyola
 `.pls` adresleri kuratörlü liste yüklendikten sonra arka planda toplu çözülür;
 böylece bildirimdeki **sonraki istasyon** tuşu da beklemeden çalışır. Keşfet
 dizininde 3.400 kayıt olduğu için orada çözüm çalma anında, tek tek yapılır.
+
+### Neden tohum, neden canlı liste değil
+
+`data/stations.json` beş platformun ortak dosyası. Android onu canlı çekseydi
+kullanıcının eklediği kanallar her yenilemede kaybolur, çıkardıkları geri
+gelirdi. Tohum bir kez atılır; bunun bedeli, sonradan eklenen kuratörlü
+kanalların kendiliğinden gelmemesi. Ayarlardaki **"Yeni kanallara bak"** bu
+farkı elle kapatır — sessizce eklemiyoruz, çünkü kullanıcının bilerek
+çıkardığı bir istasyon geri gelmemeli.
+
+### Elle eklenen kanal doğrulanır
+
+Yazım hatası aksi hâlde sessiz bir başarısızlığa dönüşüyor: kanal listeye
+giriyor, çalmıyor, kullanıcı nedenini anlayamıyor. `StreamProbe` kaydetmeden
+önce ilk baytları çekiyor; `.pls`/`.m3u` çözülüyor, HLS manifest üzerinden
+doğrulanıyor, Icecast'in durum sayfası (belge içerik türü) yayın sayılmıyor.
+
+Ülke ve tür serbest metin değil seçim listesi. Serbest bırakılsa kullanıcı
+"istanbul turkiye" / "İstanbul, Türkiye" yazar ve ülke şeridi parçalanır —
+crawler'da temizlediğimiz etiket gürültüsünün aynısı. Tür alanı yine de
+yazmaya açık, çünkü kullanıcının aklındaki tür listede olmayabilir.
 
 ### Keşfet modunda sıra
 

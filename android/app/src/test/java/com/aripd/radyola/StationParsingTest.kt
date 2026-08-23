@@ -149,6 +149,21 @@ class StationParsingTest {
     }
 
     @Test
+    fun `aynı istasyon iki listede de aynı kimliği alır`() {
+        // Listem ile Keşfet arasında "ekli mi" kontrolü kimliğe dayanıyor;
+        // aynı kayıt farklı meta veriyle gelse bile eşleşmeli.
+        val fromDirectory = RadioStation(
+            name = "Açık Radyo", url = "https://stream.34bit.net/ar.mp3",
+            location = "İstanbul, Türkiye", countryCode = "TR", genre = "Eclectic", votes = 900
+        )
+        val fromCurated = RadioStation(
+            name = "Açık Radyo", url = "https://stream.34bit.net/ar.mp3"
+        )
+
+        assertEquals(fromCurated.id, fromDirectory.id)
+    }
+
+    @Test
     fun `pls ve m3u çözülür m3u8 dokunulmaz`() {
         assertTrue(PlaylistResolver.needsResolving("http://160.75.86.29:8088/listen.pls?sid=3"))
         assertTrue(PlaylistResolver.needsResolving("http://example.com/stream.m3u"))

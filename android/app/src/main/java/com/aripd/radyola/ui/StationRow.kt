@@ -44,9 +44,10 @@ fun StationRow(
     station: RadioStation,
     isCurrent: Boolean,
     isPlaying: Boolean,
-    isFavorite: Boolean,
+    inMyList: Boolean,
+    isDiscovering: Boolean,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleInMyList: () -> Unit
 ) {
     val accent = MaterialTheme.colorScheme.primary
     Row(
@@ -113,11 +114,17 @@ fun StationRow(
             }
         }
 
-        IconButton(onClick = onToggleFavorite, modifier = Modifier.size(36.dp)) {
+        // Keşfet'te "listeme ekle", Listem'de "çıkar". Ayrı bir favori kümesi yok:
+        // liste zaten kullanıcının seçtikleri.
+        IconButton(onClick = onToggleInMyList, modifier = Modifier.size(36.dp)) {
             Icon(
-                imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
-                contentDescription = if (isFavorite) "Favorilerden çıkar" else "Favorilere ekle",
-                tint = if (isFavorite) MaterialTheme.colorScheme.secondary
+                imageVector = if (inMyList) Icons.Default.Star else Icons.Outlined.StarBorder,
+                contentDescription = when {
+                    inMyList && isDiscovering -> "Listemden çıkar"
+                    inMyList -> "Listemden çıkar"
+                    else -> "Listeme ekle"
+                },
+                tint = if (inMyList) MaterialTheme.colorScheme.secondary
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.size(19.dp)
             )

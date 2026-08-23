@@ -12,7 +12,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -30,7 +32,9 @@ fun SettingsSheet(
     state: UiState,
     onRememberChanged: (Boolean) -> Unit,
     onAutoplayChanged: (Boolean) -> Unit,
-    onSleepTimerSelected: (Int) -> Unit
+    onSleepTimerSelected: (Int) -> Unit,
+    onFetchCurated: () -> Unit,
+    curatedResult: String?
 ) {
     Column(
         modifier = Modifier
@@ -106,14 +110,41 @@ fun SettingsSheet(
         Spacer(Modifier.height(12.dp))
 
         Text(
-            "Radyola · ${state.stations.size} istasyon",
+            "Listem",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            "Listeniz size ait: ilk açılışta kuratörlü listeden dolduruldu, " +
+                "sonrasında yalnız sizin eklediğiniz ve çıkardığınız kanallar var.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Spacer(Modifier.height(10.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onFetchCurated) {
+                Text("Yeni kanallara bak")
+            }
+            if (curatedResult != null) {
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    curatedResult,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+        Spacer(Modifier.height(12.dp))
+
         Text(
-            "İstasyon listesi tüm platformlarda ortak JSON kaynağından gelir.",
+            "Radyola · listenizde ${state.myListIds.size} kanal",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

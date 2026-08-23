@@ -32,7 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import com.aripd.radyola.data.StationSource
+import com.aripd.radyola.data.ListMode
 import com.aripd.radyola.UiState
 
 @Composable
@@ -65,34 +65,18 @@ fun SearchField(
     )
 }
 
-/**
- * Ülke ve tür filtreleri — web sürümündeki iki sıra "pill" düğmenin karşılığı.
- * Favoriler seçici ülke sırasının başında durur.
- */
+/** Ülke ve tür filtreleri — web sürümündeki iki sıra "pill" düğmenin karşılığı. */
 @Composable
 fun FilterSection(
     state: UiState,
     onCountrySelected: (String?) -> Unit,
-    onGenreSelected: (String?) -> Unit,
-    onToggleFavorites: () -> Unit
+    onGenreSelected: (String?) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 2.dp)
         ) {
-            item {
-                FilterChip(
-                    selected = state.favoritesOnly,
-                    onClick = onToggleFavorites,
-                    label = { Text("Favoriler") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp))
-                    },
-                    shape = RoundedCornerShape(20.dp),
-                    colors = chipColors()
-                )
-            }
             item {
                 FilterChip(
                     selected = state.selectedCountry == null,
@@ -151,31 +135,31 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
 )
 
 /**
- * Seçkiler ↔ Keşfet geçişi.
+ * Listem ↔ Keşfet geçişi.
  *
- * Kuratörlü liste ~35 istasyon, Keşfet dizini ~3.400. İkisi aynı listede
- * gösterilemezdi: elle seçilmiş istasyonlar dizinin içinde kaybolurdu.
+ * Kullanıcının listesi birkaç düzine istasyon, Keşfet dizini ~3.400. İkisi aynı
+ * listede gösterilemezdi: elle seçilmiş istasyonlar dizinin içinde kaybolurdu.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourceToggle(
-    source: StationSource,
+    mode: ListMode,
     directoryLoading: Boolean,
-    onSelect: (StationSource) -> Unit
+    onSelect: (ListMode) -> Unit
 ) {
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         SegmentedButton(
-            selected = source == StationSource.CURATED,
-            onClick = { onSelect(StationSource.CURATED) },
+            selected = mode == ListMode.MY_LIST,
+            onClick = { onSelect(ListMode.MY_LIST) },
             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
             colors = segmentedColors(),
             icon = {}
         ) {
-            Text("Seçkiler")
+            Text("Listem")
         }
         SegmentedButton(
-            selected = source == StationSource.DIRECTORY,
-            onClick = { onSelect(StationSource.DIRECTORY) },
+            selected = mode == ListMode.DISCOVER,
+            onClick = { onSelect(ListMode.DISCOVER) },
             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
             colors = segmentedColors(),
             icon = {}

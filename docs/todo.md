@@ -25,7 +25,7 @@ Monetizasyon ve pazarlama dokümanlarında tespit edilen zayıf yönler ve bunla
 
 ## Ürün Geliştirme
 
-- [ ] **Favori istasyonlar** — localStorage veya bulut tabanlı favori listesi
+- [x] **Favori istasyonlar** — Android'de "Listem": kuratörlü listeden tohumlanan, kullanıcıya ait liste; elle kanal ekleme dahil
 - [ ] **Uyku zamanlayıcı (Sleep Timer)** — Belirli süre sonra otomatik durdurma
 - [ ] **Equalizer** — Web Audio API ile bas/tiz ayarı
 - [ ] **Özel temalar** — Açık/koyu mod geçişi, özelleştirilebilir renkler

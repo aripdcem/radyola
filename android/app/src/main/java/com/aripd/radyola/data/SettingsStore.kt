@@ -38,9 +38,14 @@ class SettingsStore(private val context: Context) {
         if (prefs[KEY_REMEMBER] != false) prefs[KEY_LAST_STATION] = id
     }
 
-    suspend fun toggleFavorite(id: String) = context.dataStore.edit { prefs ->
-        val current = prefs[KEY_FAVORITES] ?: emptySet()
-        prefs[KEY_FAVORITES] = if (id in current) current - id else current + id
+    /**
+     * Eski favori kümesini siler.
+     *
+     * Favoriler artık ayrı tutulmuyor — kullanıcı listesi zaten seçtikleri.
+     * Küme yalnız bir kez, taşıma sırasında okunuyor.
+     */
+    suspend fun clearFavorites() = context.dataStore.edit { prefs ->
+        prefs.remove(KEY_FAVORITES)
     }
 
     private companion object {
@@ -55,5 +60,6 @@ data class AppSettings(
     val rememberStation: Boolean = true,
     val autoplayOnStart: Boolean = false,
     val lastStationId: String = "",
+    /** Yalnız eski sürümden taşıma için okunur; [SettingsStore.clearFavorites] siler. */
     val favorites: Set<String> = emptySet()
 )

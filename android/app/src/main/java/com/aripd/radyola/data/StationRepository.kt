@@ -11,13 +11,26 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Uygulamanın çekebileceği iki liste. Şemaları aynı, boyutları değil. */
+/**
+ * Uzaktan çekilen listeler. Şemaları aynı, rolleri değil.
+ *
+ * Kullanıcının kendi listesi burada yok — o yereldir, [UserListStore] tutar.
+ */
 enum class StationSource(val url: String, internal val cacheName: String) {
-    /** Elle bakılan ~35 istasyon. Açılışta yüklenir. */
+    /** Kuratörlü liste. Yalnız ilk açılış tohumu ve "yeni kanallara bak" için. */
     CURATED("https://radyola.aripd.com/data/stations.json", "stations.json"),
 
-    /** radio-browser'dan derlenen ~3.400 istasyon. Yalnız Keşfet modunda çekilir. */
+    /** radio-browser'dan derlenen ~3.400 istasyon. Keşfet modunda çekilir. */
     DIRECTORY("https://radyola.aripd.com/data/directory.json", "directory.json")
+}
+
+/** Ekranda gösterilen liste. */
+enum class ListMode {
+    /** Kullanıcının kendi listesi — tohumdan başlar, sonra ona aittir. */
+    MY_LIST,
+
+    /** Keşfet dizini. */
+    DISCOVER
 }
 
 /**
