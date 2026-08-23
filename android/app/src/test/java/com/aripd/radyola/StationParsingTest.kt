@@ -74,6 +74,35 @@ class StationParsingTest {
     }
 
     @Test
+    fun `dizin kaydının oy alanı okunur`() {
+        val json = """
+            [{"title": "X", "url": "https://e.com/x.mp3", "countryCode": "TR",
+              "genre": "Folk", "votes": 15646}]
+        """.trimIndent()
+
+        assertEquals(15646, parseStations(json).single().votes)
+    }
+
+    @Test
+    fun `kuratörlü kayıtta oy sıfır kabul edilir`() {
+        val json = """[{"title": "X", "url": "https://e.com/x.mp3"}]"""
+
+        assertEquals(0, parseStations(json).single().votes)
+    }
+
+    @Test
+    fun `arama metni ad konum ve türü kapsar`() {
+        val station = RadioStation(
+            name = "Açık Radyo", url = "http://x",
+            location = "İstanbul, Türkiye", genre = "Eclectic"
+        )
+
+        assertTrue(station.searchText.contains("açık", ignoreCase = true))
+        assertTrue(station.searchText.contains("türkiye", ignoreCase = true))
+        assertTrue(station.searchText.contains("eclectic", ignoreCase = true))
+    }
+
+    @Test
     fun `bilinmeyen alanlar yok sayılır`() {
         // directory.json kalite alanları taşır; kuratörlü liste taşımaz.
         // Aynı ayrıştırıcı ikisini de okuyabilmeli.

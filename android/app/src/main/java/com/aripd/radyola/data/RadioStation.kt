@@ -12,7 +12,9 @@ data class RadioStation(
     val website: String = "",
     val location: String = "",
     val countryCode: String = "",
-    val genre: String = ""
+    val genre: String = "",
+    /** radio-browser oyu — yalnız Keşfet dizininde dolu, sıralamada kullanılır. */
+    val votes: Int = 0
 ) {
     /** Konum string'inin son parçası ülke kabul edilir: "İstanbul, Türkiye" → "Türkiye" */
     val country: String
@@ -39,6 +41,16 @@ data class RadioStation(
     /** İstasyonu benzersiz kılan anahtar — favori ve "son istasyon" kaydında kullanılır. */
     val id: String
         get() = "$name|$url"
+
+    /**
+     * Aramanın taradığı alanlar, tek seferde birleştirilmiş hâlde.
+     *
+     * Keşfet dizininde 3.400 istasyon var; her tuş vuruşunda alan alan
+     * karşılaştırmak yerine hazır bir metin üzerinde arıyoruz.
+     */
+    val searchText: String by lazy(LazyThreadSafetyMode.NONE) {
+        "$name $location $genre"
+    }
 }
 
 /**

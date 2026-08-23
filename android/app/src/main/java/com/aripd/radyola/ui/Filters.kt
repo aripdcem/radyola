@@ -25,17 +25,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import com.aripd.radyola.data.StationSource
 import com.aripd.radyola.UiState
 
 @Composable
-fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+fun SearchField(
+    query: String,
+    placeholder: String = "İstasyon ara…",
+    onQueryChange: (String) -> Unit
+) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         shape = RoundedCornerShape(14.dp),
-        placeholder = { Text("İstasyon ara…") },
+        placeholder = { Text(placeholder) },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
@@ -136,4 +148,57 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
     selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
     selectedLabelColor = MaterialTheme.colorScheme.primary,
     selectedLeadingIconColor = MaterialTheme.colorScheme.primary
+)
+
+/**
+ * Seçkiler ↔ Keşfet geçişi.
+ *
+ * Kuratörlü liste ~35 istasyon, Keşfet dizini ~3.400. İkisi aynı listede
+ * gösterilemezdi: elle seçilmiş istasyonlar dizinin içinde kaybolurdu.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SourceToggle(
+    source: StationSource,
+    directoryLoading: Boolean,
+    onSelect: (StationSource) -> Unit
+) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        SegmentedButton(
+            selected = source == StationSource.CURATED,
+            onClick = { onSelect(StationSource.CURATED) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            colors = segmentedColors(),
+            icon = {}
+        ) {
+            Text("Seçkiler")
+        }
+        SegmentedButton(
+            selected = source == StationSource.DIRECTORY,
+            onClick = { onSelect(StationSource.DIRECTORY) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            colors = segmentedColors(),
+            icon = {}
+        ) {
+            if (directoryLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(15.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text("Keşfet")
+        }
+    }
+}
+
+@Composable
+private fun segmentedColors() = SegmentedButtonDefaults.colors(
+    activeContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+    activeContentColor = MaterialTheme.colorScheme.primary,
+    activeBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+    inactiveContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+    inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    inactiveBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
 )

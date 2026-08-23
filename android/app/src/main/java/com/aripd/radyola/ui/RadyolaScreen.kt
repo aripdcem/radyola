@@ -114,8 +114,21 @@ fun RadyolaScreen(state: UiState, viewModel: MainViewModel) {
                 }
 
                 item {
+                    SourceToggle(
+                        source = state.source,
+                        directoryLoading = state.directoryLoading,
+                        onSelect = viewModel::setSource
+                    )
+                }
+
+                item {
                     SearchField(
                         query = state.query,
+                        placeholder = if (state.isDiscovering) {
+                            "${state.stations.size} istasyon içinde ara…"
+                        } else {
+                            "İstasyon ara…"
+                        },
                         onQueryChange = viewModel::setQuery
                     )
                 }

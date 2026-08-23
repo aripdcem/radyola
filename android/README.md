@@ -4,11 +4,14 @@ Jetpack Compose + Media3 (ExoPlayer) tabanlı internet radyo çalar.
 
 ## Özellikler
 
-- **Dinamik istasyon listesi** — diğer platformlarla ortak JSON kaynağı,
-  ağ yoksa disk önbelleği, o da yoksa gömülü varsayılan liste
+- **İki liste** — *Seçkiler* (elle bakılan ~35 istasyon, açılışta yüklenir) ve
+  *Keşfet* (~3.400 istasyonluk dizin, ilk geçişte çekilir). İkisi de diğer
+  platformlarla ortak JSON kaynağından gelir; ağ yoksa disk önbelleği,
+  o da yoksa gömülü varsayılan liste
 - **Arka planda çalma** — `MediaSessionService` ile ön plan servisi; bildirim,
   kilit ekranı kontrolleri ve kulaklık medya tuşları
-- **Arama ve filtreler** — ad / konum / tür üzerinde arama, ülke ve tür seçicileri
+- **Arama ve filtreler** — ad / konum / tür üzerinde arama, ülke ve tür seçicileri.
+  Keşfet'te liste oya göre sıralanır ve tür çipleri en sık 24 türle sınırlanır
 - **Favoriler** — DataStore'da kalıcı
 - **Uyku zamanlayıcı** — 15 / 30 / 45 / 60 / 90 dakika
 - **Ayarlar** — son istasyonu hatırla, açılışta otomatik çal
@@ -74,7 +77,7 @@ com.aripd.radyola
 ├── MainViewModel.kt             Tüm ekran durumu, MediaController köprüsü
 ├── data/
 │   ├── RadioStation.kt          Model, ülke/şehir/bayrak türetmeleri
-│   ├── StationRepository.kt     JSON çekme + ayrıştırma + önbellek
+│   ├── StationRepository.kt     İki kaynak (Seçkiler/Keşfet), çekme + önbellek
 │   └── SettingsStore.kt         DataStore: ayarlar ve favoriler
 ├── player/
 │   ├── RadyolaPlaybackService.kt  MediaSessionService (ön plan servisi)
@@ -90,8 +93,16 @@ com.aripd.radyola
 | `.m3u8` (HLS) | `media3-exoplayer-hls` |
 | `.pls`, `.m3u` | `PlaylistResolver` ilk akış adresini çıkarır |
 
-`.pls` adresleri liste yüklendikten sonra arka planda toplu çözülür; böylece
-bildirimdeki **sonraki istasyon** tuşu da beklemeden çalışır.
+`.pls` adresleri kuratörlü liste yüklendikten sonra arka planda toplu çözülür;
+böylece bildirimdeki **sonraki istasyon** tuşu da beklemeden çalışır. Keşfet
+dizininde 3.400 kayıt olduğu için orada çözüm çalma anında, tek tek yapılır.
+
+### Keşfet modunda sıra
+
+Oynatıcıya görünen listenin tamamı değil, seçilen istasyonun çevresinden
+**100 kayıtlık bir pencere** verilir. 3.400 `MediaItem` üretmek gereksiz;
+bildirimdeki ileri/geri için bu pencere fazlasıyla yeterli, uygulama içi
+ileri/geri ise görünen listenin tamamında dolaşır.
 
 ## Kaldırma
 

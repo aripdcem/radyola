@@ -81,6 +81,8 @@ fun StationRow(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(3.dp))
+            // Keşfet dizininde bir istasyon üç tür birden taşıyabiliyor; çipi
+            // sınırlamazsak konumu "…" olacak kadar eziyor. İkisi de yer paylaşır.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (station.location.isNotEmpty()) {
                     Text(
@@ -89,17 +91,20 @@ fun StationRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     )
                 }
-                if (station.genre.isNotEmpty()) {
+                val genres = station.genre.split("/").map { it.trim() }.filter { it.isNotEmpty() }
+                if (genres.isNotEmpty()) {
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = station.genre,
+                        text = genres.take(2).joinToString(" / "),
                         style = MaterialTheme.typography.labelSmall,
                         color = accent.copy(alpha = 0.85f),
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
+                            .weight(1f, fill = false)
                             .clip(RoundedCornerShape(6.dp))
                             .background(accent.copy(alpha = 0.14f))
                             .padding(horizontal = 7.dp, vertical = 2.dp)

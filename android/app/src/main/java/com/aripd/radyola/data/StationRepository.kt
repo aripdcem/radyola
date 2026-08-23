@@ -11,31 +11,41 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** Uygulamanın çekebileceği iki liste. Şemaları aynı, boyutları değil. */
+enum class StationSource(val url: String, internal val cacheName: String) {
+    /** Elle bakılan ~35 istasyon. Açılışta yüklenir. */
+    CURATED("https://radyola.aripd.com/data/stations.json", "stations.json"),
+
+    /** radio-browser'dan derlenen ~3.400 istasyon. Yalnız Keşfet modunda çekilir. */
+    DIRECTORY("https://radyola.aripd.com/data/directory.json", "directory.json")
+}
+
 /**
- * İstasyon listesini ortak JSON kaynağından çeker, diske önbelleğe alır.
+ * İstasyon listelerini ortak JSON kaynağından çeker, diske önbelleğe alır.
  *
  * Kaynak tüm platformlarda (macOS / Linux / Windows / web) ortaktır;
  * şema `data/README.md` içinde tanımlı.
  */
 class StationRepository(context: Context) {
 
-    private val cacheFile = File(context.filesDir, "stations.json")
+    private val filesDir = context.filesDir
 
     /**
-     * İstasyon listesini döndürür.
+     * İstenen listeyi döndürür.
      *
      * Sıra: ağ → disk önbelleği → gömülü varsayılanlar. Ağdan başarılı çekim
      * önbelleği tazeler; böylece uçak modunda da son bilinen liste açılır.
+     * Gömülü yedek yalnız kuratörlü liste için anlamlı — Keşfet'te boş dönülür.
      */
-    suspend fun loadStations(): List<RadioStation> = withContext(Dispatchers.IO) {
-        fetchWithRetry()?.also { writeCache(it) }
-            ?: readCache()
-            ?: FALLBACK_STATIONS
+    suspend fun load(source: StationSource): List<RadioStation> = withContext(Dispatchers.IO) {
+        fetchWithRetry(source)?.also { writeCache(source, it) }
+            ?: readCache(source)
+            ?: if (source == StationSource.CURATED) FALLBACK_STATIONS else emptyList()
     }
 
     /** Yalnızca diskteki önbelleği okur — açılışta anında liste göstermek için. */
-    suspend fun cachedStations(): List<RadioStation>? = withContext(Dispatchers.IO) {
-        readCache()
+    suspend fun cached(source: StationSource): List<RadioStation>? = withContext(Dispatchers.IO) {
+        readCache(source)
     }
 
     /**
@@ -44,42 +54,49 @@ class StationRepository(context: Context) {
      * Telefon uykudan yeni uyandığında Wi-Fi birkaç saniye hazır olmuyor; tek
      * denemede yedek listeye düşmek yerine bir şans daha veriyoruz.
      */
-    private suspend fun fetchWithRetry(): List<RadioStation>? {
-        fetchFromNetwork()?.let { return it }
+    private suspend fun fetchWithRetry(source: StationSource): List<RadioStation>? {
+        fetchFromNetwork(source)?.let { return it }
         delay(RETRY_DELAY_MS)
-        return fetchFromNetwork()
+        return fetchFromNetwork(source)
     }
 
-    private fun fetchFromNetwork(): List<RadioStation>? {
+    private fun fetchFromNetwork(source: StationSource): List<RadioStation>? {
         return try {
-            val connection = (URL(STATIONS_URL).openConnection() as HttpURLConnection).apply {
+            val connection = (URL(source.url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
-                readTimeout = 10_000
+                readTimeout = 20_000
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", "Radyola-Android/1.0")
                 setRequestProperty("Accept", "application/json")
+                setRequestProperty("Accept-Encoding", "gzip")
             }
             val body = try {
                 if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                    Log.w(TAG, "Beklenmeyen yanıt: HTTP ${connection.responseCode}")
+                    Log.w(TAG, "${source.name}: beklenmeyen yanıt HTTP ${connection.responseCode}")
                     return null
                 }
-                connection.inputStream.bufferedReader().use { it.readText() }
+                val stream = if (connection.contentEncoding.equals("gzip", ignoreCase = true)) {
+                    java.util.zip.GZIPInputStream(connection.inputStream)
+                } else {
+                    connection.inputStream
+                }
+                stream.bufferedReader().use { it.readText() }
             } finally {
                 connection.disconnect()
             }
             parseStations(body).takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
-            Log.w(TAG, "İstasyon listesi çekilemedi, önbelleğe düşülüyor", e)
+            Log.w(TAG, "${source.name}: liste çekilemedi, önbelleğe düşülüyor", e)
             null
         }
     }
 
-    private fun readCache(): List<RadioStation>? = try {
-        if (!cacheFile.exists()) null
-        else parseStations(cacheFile.readText()).takeIf { it.isNotEmpty() }
+    private fun readCache(source: StationSource): List<RadioStation>? = try {
+        val file = File(filesDir, source.cacheName)
+        if (!file.exists()) null
+        else parseStations(file.readText()).takeIf { it.isNotEmpty() }
     } catch (e: Exception) {
-        Log.w(TAG, "Önbellek okunamadı", e)
+        Log.w(TAG, "${source.name}: önbellek okunamadı", e)
         null
     }
 
@@ -87,7 +104,7 @@ class StationRepository(context: Context) {
      * Önbelleği kaynakla aynı şemada yazar — böylece [readCache] ile
      * [fetchFromNetwork] aynı ayrıştırıcıyı paylaşır.
      */
-    private fun writeCache(stations: List<RadioStation>) {
+    private fun writeCache(source: StationSource, stations: List<RadioStation>) {
         try {
             val array = JSONArray()
             stations.forEach { station ->
@@ -99,20 +116,18 @@ class StationRepository(context: Context) {
                         .put(FIELD_LOCATION, station.location)
                         .put(FIELD_COUNTRY_CODE, station.countryCode)
                         .put(FIELD_GENRE, station.genre)
+                        .put(FIELD_VOTES, station.votes)
                 )
             }
-            cacheFile.writeText(array.toString())
+            File(filesDir, source.cacheName).writeText(array.toString())
         } catch (e: Exception) {
-            Log.w(TAG, "Önbellek yazılamadı", e)
+            Log.w(TAG, "${source.name}: önbellek yazılamadı", e)
         }
     }
 
-    companion object {
-        private const val TAG = "StationRepository"
-        private const val RETRY_DELAY_MS = 1_500L
-
-        /** Kuratörlü istasyon listesi — tüm platformlarda ortak. */
-        const val STATIONS_URL = "https://radyola.aripd.com/data/stations.json"
+    private companion object {
+        const val TAG = "StationRepository"
+        const val RETRY_DELAY_MS = 1_500L
     }
 }
 
@@ -122,11 +137,12 @@ private const val FIELD_WEBSITE = "website"
 private const val FIELD_LOCATION = "location"
 private const val FIELD_COUNTRY_CODE = "countryCode"
 private const val FIELD_GENRE = "genre"
+private const val FIELD_VOTES = "votes"
 
 /**
  * JSON dizisini istasyon listesine çevirir.
  *
- * Adı veya çalınabilir bir adresi olmayan kayıtlar atlanır — tek bozuk satır
+ * Adı veya çalınabilir bir adresi olmayan kayıtlar atlanır — tek bozuk kayıt
  * yüzünden listenin tamamını kaybetmemek için ayrıştırma kayıt bazında toleranslı.
  */
 internal fun parseStations(json: String): List<RadioStation> {
@@ -144,7 +160,8 @@ internal fun parseStations(json: String): List<RadioStation> {
                 website = item.optString(FIELD_WEBSITE).trim(),
                 location = item.optString(FIELD_LOCATION).trim(),
                 countryCode = item.optString(FIELD_COUNTRY_CODE).trim(),
-                genre = item.optString(FIELD_GENRE).trim()
+                genre = item.optString(FIELD_GENRE).trim(),
+                votes = item.optInt(FIELD_VOTES, 0)
             )
         )
     }

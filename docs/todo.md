@@ -29,7 +29,7 @@ Monetizasyon ve pazarlama dokümanlarında tespit edilen zayıf yönler ve bunla
 - [ ] **Uyku zamanlayıcı (Sleep Timer)** — Belirli süre sonra otomatik durdurma
 - [ ] **Equalizer** — Web Audio API ile bas/tiz ayarı
 - [ ] **Özel temalar** — Açık/koyu mod geçişi, özelleştirilebilir renkler
-- [x] **Mobil uygulama (Android)** — Kotlin + Compose + Media3 native uygulama ([`android/`](../android/)); favoriler ve uyku zamanlayıcı dahil
+- [x] **Mobil uygulama (Android)** — Kotlin + Compose + Media3 native uygulama ([`android/`](../android/)); favoriler, uyku zamanlayıcı ve ~3.400 istasyonluk Keşfet dizini dahil
 - [ ] **Mobil uygulama (iOS)** — macOS sürümündeki AVFoundation katmanı paylaşılabilir
 
 ## Topluluk

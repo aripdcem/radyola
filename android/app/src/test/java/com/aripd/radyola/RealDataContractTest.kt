@@ -15,6 +15,7 @@ import java.io.File
 class RealDataContractTest {
 
     private val dataFile = File("../../data/stations.json")
+    private val directoryFile = File("../../data/directory.json")
 
     @Test
     fun `kuratörlü liste ayrıştırılabiliyor`() {
@@ -40,5 +41,39 @@ class RealDataContractTest {
             "Bayrağı çözülemeyen istasyonlar: ${flagless.map { "${it.name} (${it.countryCode}/${it.country})" }}",
             flagless.isEmpty()
         )
+    }
+
+    @Test
+    fun `Keşfet dizini ayrıştırılabiliyor`() {
+        assumeTrue("data/directory.json bulunamadı", directoryFile.exists())
+
+        val stations = parseStations(directoryFile.readText())
+
+        assertTrue("Dizin binlerce istasyon taşımalı", stations.size > 1000)
+        assertTrue(
+            "Her istasyonun ISO ülke kodu olmalı",
+            stations.all { it.countryCode.length == 2 }
+        )
+        assertTrue(
+            "Oy alanı taşınmalı — Keşfet sıralaması buna dayanıyor",
+            stations.count { it.votes > 0 } > stations.size / 2
+        )
+    }
+
+    @Test
+    fun `dizin tür etiketleri fasete uygun`() {
+        assumeTrue(directoryFile.exists())
+
+        val genres = parseStations(directoryFile.readText())
+            .flatMap { it.genre.split("/") }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        val distinct = genres.distinct()
+        assertTrue("Tür sayısı filtre için makul olmalı, bulunan: ${distinct.size}", distinct.size < 600)
+
+        // Crawler temizliğinin bıraktığı gürültü türleri geri gelirse haber versin.
+        val noise = distinct.filter { it.length <= 2 || it.length > 25 || it.matches(Regex("[\\d.,\\s]+")) }
+        assertTrue("Gürültü etiketleri: $noise", noise.isEmpty())
     }
 }

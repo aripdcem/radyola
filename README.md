@@ -143,6 +143,7 @@ rmdir /s /q "%APPDATA%\Radyola"
 
 Jetpack Compose + Media3 (ExoPlayer) tabanlı radyo çalar. Arka planda çalma,
 bildirim ve kilit ekranı kontrolleri, favoriler ve uyku zamanlayıcı içerir.
+Kuratörlü listenin yanında ~3.400 istasyonluk **Keşfet** dizininde arama yapar.
 
 - **Konum:** [`android/`](android/)
 - **Gereksinim:** Android 7.0+ (API 24), derleme için JDK 17 + Android SDK 34

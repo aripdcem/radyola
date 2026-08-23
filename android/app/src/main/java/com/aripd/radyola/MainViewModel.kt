@@ -15,6 +15,7 @@ import com.aripd.radyola.data.AppSettings
 import com.aripd.radyola.data.RadioStation
 import com.aripd.radyola.data.SettingsStore
 import com.aripd.radyola.data.StationRepository
+import com.aripd.radyola.data.StationSource
 import com.aripd.radyola.player.PlaylistResolver
 import com.aripd.radyola.player.RadyolaPlaybackService
 import kotlinx.coroutines.Job
@@ -29,6 +30,8 @@ import kotlinx.coroutines.launch
 
 /** Uygulamanın tüm ekran durumu. */
 data class UiState(
+    val source: StationSource = StationSource.CURATED,
+    val directoryLoading: Boolean = false,
     val stations: List<RadioStation> = emptyList(),
     val visible: List<RadioStation> = emptyList(),
     val countries: List<String> = emptyList(),
@@ -49,6 +52,9 @@ data class UiState(
 ) {
     val hasFilters: Boolean
         get() = query.isNotBlank() || selectedCountry != null || selectedGenre != null || favoritesOnly
+
+    val isDiscovering: Boolean
+        get() = source == StationSource.DIRECTORY
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -63,6 +69,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val resolvedUrls = mutableMapOf<String, String>()
     private var sleepTimerJob: Job? = null
     private var pendingAutoplayId: String? = null
+
+    // Mod değiştikçe yeniden çekmemek için her iki liste de bellekte tutulur.
+    private val loaded = mutableMapOf<StationSource, List<RadioStation>>()
+
+    // Oynatıcıya verilen sıra. Keşfet'te görünen liste 3.400 kayıt olabiliyor;
+    // hepsini MediaItem'a çevirmek yerine seçilen istasyonun çevresinden bir
+    // pencere alıyoruz — ileri/geri tuşları için fazlasıyla yeterli.
+    private var queue: List<RadioStation> = emptyList()
 
     init {
         connectToPlayer()
@@ -139,31 +153,67 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun loadStations() {
+    /** Ekrandaki listeyi tazeler — hangi mod açıksa o kaynağı yeniden çeker. */
+    fun loadStations() = loadSource(_uiState.value.source, forceRefresh = true)
+
+    private fun loadSource(source: StationSource, forceRefresh: Boolean = false) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            if (!forceRefresh) {
+                // Daha önce çekilmişse ağa hiç çıkma: mod geçişi anında olsun.
+                loaded[source]?.let { publishStations(source, it); return@launch }
+            }
+            _uiState.update {
+                if (source == StationSource.DIRECTORY) it.copy(directoryLoading = true)
+                else it.copy(isLoading = true)
+            }
 
             // Önce önbellek: liste anında görünsün, ağ yavaşsa da ekran boş kalmasın.
-            repository.cachedStations()?.let { cached -> publishStations(cached) }
+            repository.cached(source)?.let { cached -> publishStations(source, cached) }
 
-            val stations = repository.loadStations()
-            publishStations(stations)
-            _uiState.update { it.copy(isLoading = false) }
+            val stations = repository.load(source)
+            loaded[source] = stations
+            publishStations(source, stations)
+            _uiState.update { it.copy(isLoading = false, directoryLoading = false) }
 
-            maybeAutoplay()
-            preResolvePlaylists(stations)
+            if (source == StationSource.CURATED) {
+                maybeAutoplay()
+                // Keşfet dizininde 3.400 kayıt var; hepsini önden çözmek anlamsız,
+                // çalma anındaki tekil çözüm yeterli.
+                preResolvePlaylists(stations)
+            }
         }
     }
 
-    private fun publishStations(stations: List<RadioStation>) {
+    /** Seçkiler ↔ Keşfet geçişi. Dizin ilk geçişte çekilir, sonra bellekten gelir. */
+    fun setSource(source: StationSource) {
+        if (_uiState.value.source == source) return
+        _uiState.update {
+            it.copy(source = source, query = "", selectedCountry = null, selectedGenre = null)
+        }
+        loadSource(source)
+    }
+
+    private fun publishStations(source: StationSource, stations: List<RadioStation>) {
         val countries = stations.map { it.country }.distinct().sorted()
-        val genres = stations
+
+        // Kuratörlü listede birkaç tür var, hepsi çipe sığar. Dizinde 438 tür
+        // var; en sık geçenler dışını göstermek şeridi kullanılmaz hâle getirir.
+        val genreCounts = stations
             .flatMap { it.genre.split("/") }
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-            .distinct()
+            .groupingBy { it }
+            .eachCount()
+        val genres = genreCounts.entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            .take(MAX_GENRE_CHIPS)
+            .map { it.key }
             .sorted()
-        _uiState.update { it.copy(stations = stations, countries = countries, genres = genres) }
+
+        _uiState.update {
+            if (it.source != source) it // kullanıcı beklerken mod değiştirdi
+            else it.copy(stations = stations, countries = countries, genres = genres)
+        }
         applyFilters()
     }
 
@@ -226,12 +276,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun applyFilters() {
         _uiState.update { state ->
             val query = state.query.trim()
-            val visible = state.stations.filter { station ->
+            val filtered = state.stations.filter { station ->
                 (state.selectedCountry == null || station.country == state.selectedCountry) &&
                     (state.selectedGenre == null || station.genre.contains(state.selectedGenre, true)) &&
                     (!state.favoritesOnly || station.id in state.settings.favorites) &&
-                    (query.isEmpty() || station.matches(query))
+                    (query.isEmpty() || station.searchText.contains(query, ignoreCase = true))
             }
+            // Kuratörlü listenin sırası elle verilmiş, korunur. Dizinde 3.400 kayıt
+            // rastgele sırada; oy en anlamlı sıralama ölçütü.
+            val visible = if (state.isDiscovering) filtered.sortedByDescending { it.votes } else filtered
             state.copy(visible = visible)
         }
     }
@@ -252,8 +305,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 resolvedUrls[station.url] = PlaylistResolver.resolve(station.url)
             }
 
-            // Sıra = ekranda görünen liste; bildirimdeki ileri/geri de bu sırayı izler.
-            val queue = _uiState.value.visible.ifEmpty { listOf(station) }
+            // Sıra = ekranda görünen listeden bir pencere; bildirimdeki ileri/geri
+            // de bu sırayı izler.
+            queue = queueWindowAround(station)
             val index = queue.indexOfFirst { it.id == station.id }.coerceAtLeast(0)
 
             player.setMediaItems(queue.map(::toMediaItem), index, 0L)
@@ -282,12 +336,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun skipToPrevious() = skip(-1)
 
     private fun skip(direction: Int) {
-        val player = controller ?: return
-        val queue = _uiState.value.visible
-        if (queue.isEmpty()) return
-        val currentIndex = queue.indexOfFirst { it.id == _uiState.value.current?.id }
-        val nextIndex = ((currentIndex + direction) + queue.size) % queue.size
-        play(queue[nextIndex])
+        controller ?: return
+        val visible = _uiState.value.visible
+        if (visible.isEmpty()) return
+        val currentIndex = visible.indexOfFirst { it.id == _uiState.value.current?.id }
+        val nextIndex = ((currentIndex + direction) + visible.size) % visible.size
+        play(visible[nextIndex])
+    }
+
+    /**
+     * Oynatıcıya verilecek sırayı [station] çevresinden keser.
+     *
+     * Liste [MAX_QUEUE_SIZE] altındaysa olduğu gibi kullanılır; büyükse
+     * istasyonun iki yanından eşit pay alınır.
+     */
+    private fun queueWindowAround(station: RadioStation): List<RadioStation> {
+        val visible = _uiState.value.visible.ifEmpty { return listOf(station) }
+        if (visible.size <= MAX_QUEUE_SIZE) return visible
+        val index = visible.indexOfFirst { it.id == station.id }.coerceAtLeast(0)
+        val half = MAX_QUEUE_SIZE / 2
+        val start = (index - half).coerceIn(0, visible.size - MAX_QUEUE_SIZE)
+        return visible.subList(start, start + MAX_QUEUE_SIZE)
     }
 
     fun stop() {
@@ -295,14 +364,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             pause()
             clearMediaItems()
         }
+        queue = emptyList()
         _uiState.update { it.copy(current = null, isPlaying = false, nowPlayingTrack = null) }
     }
 
     /** Çözülen adresler geldiğinde sıradaki öğeleri güncel URL'lerle tazeler. */
     private fun refreshQueueUrls() {
         val player = controller ?: return
-        if (player.mediaItemCount == 0) return
-        val queue = _uiState.value.visible
+        if (player.mediaItemCount == 0 || queue.isEmpty()) return
         val currentId = player.currentMediaItem?.mediaId ?: return
         val index = queue.indexOfFirst { it.id == currentId }
         if (index < 0) return
@@ -387,10 +456,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-/** Ad, konum ve tür alanlarında büyük/küçük harf duyarsız arama. */
-private fun RadioStation.matches(query: String): Boolean {
-    val needle = query.lowercase()
-    return name.lowercase().contains(needle) ||
-        location.lowercase().contains(needle) ||
-        genre.lowercase().contains(needle)
-}
+/** Tür çipi şeridinde gösterilecek en fazla tür sayısı. */
+private const val MAX_GENRE_CHIPS = 24
+
+/** Oynatıcıya verilen sıranın üst sınırı. */
+private const val MAX_QUEUE_SIZE = 100
