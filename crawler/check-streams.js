@@ -12,6 +12,10 @@
  *   node check-streams.js --file yol.json
  *   node check-streams.js --json rapor.json  → makine okunur çıktı
  *   node check-streams.js --fail-on-dead     → ölü varsa çıkış kodu 1 (CI)
+ *
+ * Bir istasyona `"expectDown": "sebep"` alanı eklenirse kapalı olması beklenir:
+ * raporda ayrı gösterilir, çıkış kodunu etkilemez. Yayın geri döndüğünde
+ * denetleyici haber verir ki işaret kaldırılsın.
  */
 
 const https = require("https");
@@ -86,7 +90,7 @@ Radyola Yayın Denetleyici
   --concurrency N    Eşzamanlı istek (varsayılan: ${DEFAULTS.concurrency})
   --attempts N       Ölü saymadan önceki deneme (varsayılan: ${DEFAULTS.attempts})
   --timeout N        Saniye cinsinden zaman aşımı (varsayılan: 12)
-  --fail-on-dead     Ölü yayın varsa çıkış kodu 1 döndür
+  --fail-on-dead     Ölü yayın varsa çıkış kodu 1 döndür (muaf olanlar sayılmaz)
   --help             Bu mesaj
 `);
         process.exit(0);
@@ -417,12 +421,20 @@ async function main() {
   );
   const elapsedSec = Number(process.hrtime.bigint() - started) / 1e9;
 
-  const dead = results.filter((r) => !r.ok);
-  const alive = results.length - dead.length;
+  // `expectDown` işaretli istasyonlar bilerek muaf: yayının geçici olarak
+  // kapalı olduğunu biliyoruz (ör. üniversite radyosu, yaz tatili). Ölü
+  // sayılırlar ama işi kırmızıya çevirmezler — her hafta kırmızı gelen bir
+  // denetim, gerçek bir bozulma olduğunda fark edilmez hâle gelir.
+  const exempt = (r) => Boolean(r.station.expectDown);
+  const dead = results.filter((r) => !r.ok && !exempt(r));
+  const knownDown = results.filter((r) => !r.ok && exempt(r));
+  const recovered = results.filter((r) => r.ok && exempt(r));
+  const alive = results.filter((r) => r.ok).length;
 
   console.log("\n═══════════════════════════════════════════");
   console.log(`✅ Çalışan: ${alive}/${results.length} (%${Math.round((100 * alive) / results.length)})`);
   console.log(`❌ Ölü:     ${dead.length}`);
+  if (knownDown.length > 0) console.log(`⏸️  Muaf:     ${knownDown.length} (beklenen kapalılık)`);
   console.log(`⏱  Süre:    ${elapsedSec.toFixed(1)} sn`);
   console.log("═══════════════════════════════════════════");
 
@@ -437,16 +449,39 @@ async function main() {
     });
   }
 
+  if (knownDown.length > 0) {
+    console.log("\nMuaf tutulanlar (kapalı olması bekleniyor):\n");
+    knownDown.forEach((r) => {
+      console.log(`  ${r.station.title} — ${r.station.expectDown}`);
+      console.log(`    sebep : ${r.reason}`);
+      console.log();
+    });
+  }
+
+  // Muafiyet kalıcı olmamalı: yayın döndüyse haber ver ki işaret kaldırılsın.
+  if (recovered.length > 0) {
+    console.log("\n🔔 Muaf tutulmuştu ama ÇALIŞIYOR — expectDown işaretini kaldırın:\n");
+    recovered.forEach((r) => console.log(`  ${r.station.title} (${r.station.expectDown})`));
+    console.log();
+  }
+
   if (config.jsonOut) {
+    const describe = (r) => ({
+      title: r.station.title,
+      url: r.station.url,
+      resolvedUrl: r.resolvedFrom ? r.url : undefined,
+      reason: r.reason,
+      expectDown: r.station.expectDown,
+    });
     const report = {
       file: path.relative(path.join(__dirname, ".."), config.file),
       total: results.length,
       alive,
-      dead: dead.map((r) => ({
+      dead: dead.map(describe),
+      knownDown: knownDown.map(describe),
+      recovered: recovered.map((r) => ({
         title: r.station.title,
-        url: r.station.url,
-        resolvedUrl: r.resolvedFrom ? r.url : undefined,
-        reason: r.reason,
+        expectDown: r.station.expectDown,
       })),
     };
     fs.writeFileSync(config.jsonOut, JSON.stringify(report, null, 2) + "\n", "utf8");

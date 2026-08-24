@@ -40,6 +40,24 @@ CI'da haftalık çalışması için GitLab arayüzünden bir zamanlama kurun:
 döner; bildirim mekanizması budur. `STREAM_CHECK_SOFT=1` değişkeniyle
 yumuşatılabilir.
 
+### Beklenen kapalılık
+
+Bir istasyona `expectDown` alanı eklenirse denetleyici onu ölü sayar ama işi
+kırmızıya çevirmez:
+
+```json
+{
+  "title": "Radyo Boğaziçi",
+  "url": "http://nova.radyobogazici.net:7008/listen",
+  "expectDown": "Yaz tatili — Eylül 2026'da tekrar bak"
+}
+```
+
+Amaç alarmı anlamlı tutmak: her hafta kırmızı gelen bir denetim, gerçek bir
+bozulma olduğunda fark edilmez. Muafiyet kalıcı değil — yayın geri döndüğünde
+denetleyici **"muaf tutulmuştu ama çalışıyor"** diye haber verir, işaret
+kaldırılsın diye. Alanı diğer platformlar yok sayar.
+
 ### Yanlış alarm vermemek için
 
 Sürekli hatalı uyaran bir denetleyici görmezden gelinir. Dört tuzağı ölçüp
