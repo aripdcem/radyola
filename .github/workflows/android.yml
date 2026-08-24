@@ -4,9 +4,12 @@
 # Sürüm etiketiyle (v1.2.3) yapılan yayınlar için `release.yml`'e bakın.
 name: Android
 
+# push yalnız main'i dinler: PR'lı bir dalda hem push hem pull_request
+# tetiklenip aynı işi iki kez koşturuyordu. PR'sız bir daldan APK almak
+# için workflow_dispatch ile elle tetiklenebilir.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "android/**"
       - "data/**"
