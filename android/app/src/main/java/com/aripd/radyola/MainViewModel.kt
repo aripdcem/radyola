@@ -2,7 +2,9 @@ package com.aripd.radyola
 
 import android.app.Application
 import android.content.ComponentName
+import android.os.Bundle
 import androidx.core.content.ContextCompat
+import androidx.core.os.bundleOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
@@ -10,6 +12,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.aripd.radyola.data.AppSettings
 import com.aripd.radyola.data.RadioStation
@@ -106,6 +109,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 mediaController.repeatMode = Player.REPEAT_MODE_ALL
                 mediaController.addListener(playerListener)
                 syncPlayerState()
+                querySleepTimer(mediaController)
                 pendingAutoplayId?.let { id ->
                     pendingAutoplayId = null
                     stationById(id)?.let { play(it) }
@@ -567,22 +571,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── uyku zamanlayıcı ─────────────────────────────────────
 
-    /** [minutes] dakika sonra çalmayı durdurur; 0 zamanlayıcıyı iptal eder. */
+    /**
+     * [minutes] dakika sonra çalmayı durdurur; 0 zamanlayıcıyı iptal eder.
+     *
+     * Asıl sayaç serviste çalışır (bkz. [RadyolaPlaybackService]): burada
+     * tutulsaydı kullanıcı uygulamayı son kullanılanlardan kaydırdığında
+     * ViewModel'le birlikte ölür, yayın sabaha kadar çalardı — zamanlayıcının
+     * tam da önlemesi gereken senaryo. Buradaki iş yalnız ekrandaki geri sayım.
+     */
     fun setSleepTimer(minutes: Int) {
+        val c = controller ?: return
+        c.sendCustomCommand(
+            SessionCommand(RadyolaPlaybackService.CMD_SLEEP_SET, Bundle.EMPTY),
+            bundleOf(RadyolaPlaybackService.KEY_SLEEP_MINUTES to minutes)
+        )
+        startSleepDisplay(minutes, minutes * 60)
+    }
+
+    /**
+     * Servisteki zamanlayıcıyı sorup ekrandaki geri sayımı ona bağlar.
+     *
+     * Uygulama kapatılıp yeniden açıldığında zamanlayıcı serviste sürüyor
+     * olabilir; ayarlar bunu bilmezse "Kapalı" gösterir ve kullanıcı yanlışlıkla
+     * ikinci kez kurar.
+     */
+    private fun querySleepTimer(c: MediaController) {
+        val future = c.sendCustomCommand(
+            SessionCommand(RadyolaPlaybackService.CMD_SLEEP_QUERY, Bundle.EMPTY),
+            Bundle.EMPTY
+        )
+        future.addListener(
+            {
+                val result = runCatching { future.get() }.getOrNull() ?: return@addListener
+                startSleepDisplay(
+                    result.extras.getInt(RadyolaPlaybackService.KEY_SLEEP_MINUTES, 0),
+                    result.extras.getInt(RadyolaPlaybackService.KEY_SLEEP_REMAINING_SEC, 0)
+                )
+            },
+            ContextCompat.getMainExecutor(getApplication())
+        )
+    }
+
+    /** Ekrandaki geri sayım — yalnız görüntü; süre dolunca durduran taraf servis. */
+    private fun startSleepDisplay(minutes: Int, remainingSec: Int) {
         sleepTimerJob?.cancel()
-        if (minutes <= 0) {
+        if (minutes <= 0 || remainingSec <= 0) {
             _uiState.update { it.copy(sleepTimerMinutes = 0, sleepTimerRemainingSec = 0) }
             return
         }
-        _uiState.update { it.copy(sleepTimerMinutes = minutes, sleepTimerRemainingSec = minutes * 60) }
+        _uiState.update { it.copy(sleepTimerMinutes = minutes, sleepTimerRemainingSec = remainingSec) }
         sleepTimerJob = viewModelScope.launch {
-            var remaining = minutes * 60
+            var remaining = remainingSec
             while (remaining > 0) {
                 delay(1_000)
                 remaining--
                 _uiState.update { it.copy(sleepTimerRemainingSec = remaining) }
             }
-            controller?.pause()
             _uiState.update { it.copy(sleepTimerMinutes = 0, sleepTimerRemainingSec = 0) }
         }
     }

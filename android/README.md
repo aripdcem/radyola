@@ -14,7 +14,9 @@ Jetpack Compose + Media3 (ExoPlayer) tabanlı internet radyo çalar.
   kilit ekranı kontrolleri ve kulaklık medya tuşları
 - **Arama ve filtreler** — ad / konum / tür üzerinde arama, ülke ve tür seçicileri.
   Keşfet'te liste oya göre sıralanır ve tür çipleri en sık 24 türle sınırlanır
-- **Uyku zamanlayıcı** — 15 / 30 / 45 / 60 / 90 dakika
+- **Uyku zamanlayıcı** — 15 / 30 / 45 / 60 / 90 dakika. Sayaç oynatma
+  servisinde çalışır: uygulama son kullanılanlardan kaydırılsa da yayın
+  vakti gelince durur
 - **Ayarlar** — son istasyonu hatırla, açılışta otomatik çal
 - **Ses odağı** — arama gelince duraklar, kulaklık çıkınca susar
 - Açık/koyu tema, Android 13+ tek renk (monochrome) uygulama simgesi
