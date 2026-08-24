@@ -8,8 +8,8 @@ Radyola, çoklu platform (Web, Android, Linux, macOS, Windows) internet radyo ç
 
 | Özellik | Değer |
 |---|---|
-| **Platformlar** | Web (GitLab Pages), Android (Kotlin/Compose), Linux (.deb), macOS (Swift), Windows (.exe) |
-| **İstasyon Kaynağı** | Depodaki JSON ([`data/`](../data/)), GitLab Pages'ten yayınlanır |
+| **Platformlar** | Web (GitHub Pages), Android (Kotlin/Compose), Linux (.deb), macOS (Swift), Windows (.exe) |
+| **İstasyon Kaynağı** | Depodaki JSON ([`data/`](../data/)), GitHub Pages'ten yayınlanır |
 | **Lisans** | MIT (açık kaynak) |
 | **Altyapı Maliyeti** | ~$0 (yalnızca statik hosting) |
 | **Kullanıcı Tabanı** | Henüz bilinmiyor |

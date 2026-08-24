@@ -52,9 +52,54 @@ cd android
 ./gradlew testDebugUnitTest
 ```
 
-> Yayın yapılandırması, yan yükleme (sideload) kolay olsun diye debug anahtarıyla
-> imzalanır. Google Play'e yükleyecekseniz `app/build.gradle.kts` içinde kendi
-> `signingConfig` tanımınızı kullanın.
+## İmzalama
+
+Anahtar deposu verilmişse onunla, verilmemişse debug anahtarıyla imzalanır.
+Yol ve parolalar ortam değişkeninden ya da Gradle özelliğinden okunur:
+
+| Ortam değişkeni | Gradle özelliği | Varsayılan |
+|---|---|---|
+| `RADYOLA_KEYSTORE_FILE` | `radyola.keystoreFile` | — (yoksa debug anahtarı) |
+| `RADYOLA_KEYSTORE_PASSWORD` | `radyola.keystorePassword` | — |
+| `RADYOLA_KEY_ALIAS` | `radyola.keyAlias` | `radyola` |
+| `RADYOLA_KEY_PASSWORD` | `radyola.keyPassword` | store parolası |
+| `RADYOLA_VERSION_CODE` | `radyola.versionCode` | `1` |
+| `RADYOLA_VERSION_NAME` | `radyola.versionName` | `1.0.0` |
+
+Kendi anahtarınızı üretin:
+
+```bash
+keytool -genkeypair -v -keystore radyola-release.jks \
+    -alias radyola -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Yerelde imzalı derleme:
+
+```bash
+RADYOLA_KEYSTORE_FILE=$PWD/radyola-release.jks \
+RADYOLA_KEYSTORE_PASSWORD=... \
+./gradlew assembleRelease
+```
+
+> **Anahtar deposunu depoya koymayın.** CI'da GitHub secret olarak tutulur:
+> `base64 -w0 radyola-release.jks` çıktısını `ANDROID_KEYSTORE_BASE64`
+> secret'ına yazın (bkz. [`.github/workflows/release.yml`](../.github/workflows/release.yml)).
+
+> **Neden önemli:** debug anahtarı her makinede — ve CI'da her koşuda — yeniden
+> üretilir. Debug anahtarıyla imzalanmış iki APK farklı imza taşır; cihaz
+> ikincisini güncelleme saymaz, kullanıcı önce uygulamayı kaldırmak zorunda
+> kalır. Sürüm yayınlıyorsanız kendi anahtarınızı tanımlayın.
+
+## CI
+
+Her itmede [`android.yml`](../.github/workflows/android.yml) testleri koşar ve
+APK üretir; Actions koşusunun **Artifacts** bölümünden inilir. `v*` etiketi
+itildiğinde [`release.yml`](../.github/workflows/release.yml) imzalı APK'yı
+GitHub Release'e ekler.
+
+CI, `versionCode`'u commit sayısından türetir (`git rev-list --count HEAD`):
+monoton artar, CI koşu sayacından bağımsızdır ve aynı commit her zaman aynı
+numarayı verir.
 
 ## Cihaza Kurma
 

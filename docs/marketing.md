@@ -25,7 +25,7 @@
 
 ## 2. Sıfıra Yakın Altyapı Maliyeti
 
-**Ne demek:** Radyola hiçbir ses dosyası barındırmaz, radyo akışlarını yönlendirir. Hosting GitLab Pages (ücretsiz), istasyon verisi depodaki bir JSON dosyası (ücretsiz).
+**Ne demek:** Radyola hiçbir ses dosyası barındırmaz, radyo akışlarını yönlendirir. Hosting GitHub Pages (ücretsiz), istasyon verisi depodaki bir JSON dosyası (ücretsiz).
 
 **Neden önemli:**
 - Sunucu maliyeti yok → kâra geçiş eşiği çok düşük
@@ -44,7 +44,7 @@ tek bir repository'den ve tek bir veri kaynağından yönetiliyor.
 
 | Platform | Teknoloji | Dağıtım |
 |---|---|---|
-| 🌐 Web | Vanilla JS, Web Component | GitLab Pages |
+| 🌐 Web | Vanilla JS, Web Component | GitHub Pages |
 | 🤖 Android | Kotlin, Jetpack Compose, Media3 | APK |
 | 🐧 Linux | Python, GTK4, GStreamer | .deb paketi |
 | 🍎 macOS | Swift, SwiftUI, AVFoundation | Xcode |
@@ -136,7 +136,7 @@ kapatır — [`todo.md`](todo.md) içinde açık madde.
 **Neden önemli:**
 - Güven oluşturur — gizli veri toplama, gizli izleme yok
 - Topluluk katkılarıyla organik büyüme potansiyeli
-- Geliştirici ekosisteminde görünürlük (GitHub/GitLab stars)
+- Geliştirici ekosisteminde görünürlük (GitHub stars)
 - Kurumsal müşteriler kodu denetleyebilir
 
 **Pazarlama mesajı:**

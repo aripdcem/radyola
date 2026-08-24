@@ -73,9 +73,9 @@ Maintainer: Radyola <radyola@example.com>
 Description: İnternet Radyo Çalar
  Radyola, GTK4/Libadwaita/GStreamer tabanlı bir internet
  radyo çalar uygulamasıdır. System tray üzerinden çalışır,
- Google Sheets'ten dinamik istasyon listesi çeker.
+ ortak JSON kaynağından dinamik istasyon listesi çeker.
  MPRIS D-Bus entegrasyonu ile media tuşlarını destekler.
-Homepage: https://github.com/aripd/radyola
+Homepage: https://github.com/aripdcem/radyola
 EOF
 
 # Post-install script (isteğe bağlı — masaüstü veritabanını günceller)

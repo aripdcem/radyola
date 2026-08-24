@@ -35,10 +35,17 @@ node crawler/check-streams.js --directory      # data/directory.json (yavaş)
 node crawler/check-streams.js --json rapor.json --fail-on-dead
 ```
 
-CI'da haftalık çalışması için GitLab arayüzünden bir zamanlama kurun:
-**Build → Pipeline schedules → New schedule**. Ölü yayın bulunursa iş kırmızıya
-döner; bildirim mekanizması budur. `STREAM_CHECK_SOFT=1` değişkeniyle
-yumuşatılabilir.
+CI'da haftalık çalışır — zamanlama iş akışının içinde tanımlı, arayüzden ayrıca
+bir şey kurmak gerekmez: [`.github/workflows/stream-check.yml`](../.github/workflows/stream-check.yml)
+(pazartesi 04:17 UTC).
+
+Ölü yayın bulunursa iş kırmızıya döner **ve** `stream-health` etiketli bir issue
+açılır/güncellenir — kırmızı iş tek başına gözden kaçıyor, issue kaçmıyor.
+
+Elle çalıştırmak için: **Actions → Yayın denetimi → Run workflow**. İki seçenek
+var: `list` (`curated` / `directory`) ve `soft` (ölü yayın bulunsa da iş
+kırmızıya dönmesin). Dizin denetimi 3.400 kayıt tarar, saatler sürebilir ve her
+zaman bir miktar ölü yayın içerdiği için işi kırmızıya çevirmez.
 
 ### Beklenen kapalılık
 
