@@ -50,6 +50,17 @@ function stationKey(s) {
   return `${s.name}|${s.url}`;
 }
 
+/**
+ * Web sitesi bağlantısı olarak kullanılabilir mi?
+ *
+ * Discover verisi radio-browser.info'dan geliyor — herkesin düzenleyebildiği
+ * bir veritabanı. `javascript:` gibi şemaları eleyip yalnız http(s) kabul
+ * ediyoruz; adres ayrıca HTML'e gömülmez, DOM üzerinden atanır (bkz. _appendRows).
+ */
+function safeWebsite(url) {
+  return /^https?:\/\//i.test(url) ? url : "";
+}
+
 /* ── CSS (loaded from external file into shadow DOM) ────── */
 const CSS_PATH = "./radyola-player.css";
 
@@ -411,8 +422,19 @@ class AripdRadyola extends HTMLElement {
             ${s.genre ? `<span class="station-genre">${this._esc(s.genre)}</span>` : ""}
           </div>
         </div>
-        ${s.website ? `<a class="station-ext" href="${this._esc(s.website)}" target="_blank" rel="noopener" title="Visit website">${SVG.extLink}</a>` : ""}
       `;
+
+      // Website bağlantısı HTML string'ine gömülmez: _esc tırnak kaçırmıyor,
+      // veri kaynağı da topluluk düzenlemesine açık — href'ten öznitelik
+      // enjeksiyonu mümkün olurdu. setAttribute bu sınıf hatayı yapısal kapatır.
+      const site = safeWebsite(s.website);
+      if (site) {
+        const ext = el("a", "station-ext", {
+          href: site, target: "_blank", rel: "noopener", title: "Visit website",
+        });
+        ext.innerHTML = SVG.extLink;
+        row.appendChild(ext);
+      }
 
       row.addEventListener("click", (e) => {
         if (e.target.closest(".station-ext")) return;
