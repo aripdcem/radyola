@@ -547,23 +547,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Kuratörlü listede olup kullanıcıda olmayanları ekler.
+     * Kuratörlü listeyle farkı kapatır: yeni kanalları ekler, adresi
+     * düzeltilenlerin URL'sini günceller.
      *
-     * Tohum bir kez atıldığı için sonradan eklenen kanallar kullanıcıya
-     * ulaşmıyor. Bunu sessizce yapmıyoruz — kullanıcının bilerek çıkardığı
-     * bir istasyon geri gelmemeli, bu yüzden yalnız istendiğinde çalışır.
+     * Tohum bir kez atıldığı için sonradan eklenen kanallar da, ölü yayın
+     * düzeltmeleri de kullanıcıya kendiliğinden ulaşmıyor. Bunu sessizce
+     * yapmıyoruz — kullanıcının bilerek çıkardığı bir istasyon geri gelmemeli,
+     * bu yüzden yalnız istendiğinde çalışır.
      */
-    fun addNewCuratedStations(onResult: (Int) -> Unit) {
+    fun addNewCuratedStations(onResult: (added: Int, updated: Int) -> Unit) {
         viewModelScope.launch {
             val curated = repository.load(StationSource.CURATED)
+
+            // Önce adres düzeltmeleri: kimlik URL'yi içerdiği için güncelleme
+            // kimliği değiştirir; "son istasyon" kaydı da onunla taşınır.
+            val renames = userList.applyUrlUpdates(curated)
+            renames.firstOrNull { (oldId, _) -> oldId == _uiState.value.settings.lastStationId }
+                ?.let { (_, newId) -> settingsStore.setLastStation(newId) }
+
             val missing = userList.missingFrom(curated)
             missing.forEach { userList.add(it) }
-            if (missing.isNotEmpty()) {
+
+            if (missing.isNotEmpty() || renames.isNotEmpty()) {
                 userList.load()
                 _uiState.update { it.copy(myListIds = userList.ids) }
                 if (_uiState.value.mode == ListMode.MY_LIST) publishMyList()
             }
-            onResult(missing.size)
+            onResult(missing.size, renames.size)
         }
     }
 

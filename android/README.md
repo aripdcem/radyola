@@ -156,6 +156,12 @@ kanalların kendiliğinden gelmemesi. Ayarlardaki **"Yeni kanallara bak"** bu
 farkı elle kapatır — sessizce eklemiyoruz, çünkü kullanıcının bilerek
 çıkardığı bir istasyon geri gelmemeli.
 
+Aynı düğme **adres düzeltmelerini** de uygular: kuratörlü listede bir yayının
+URL'si değiştiyse (ölü yayın düzeltmesi) kullanıcıdaki aynı adlı kaydın adresi
+yerinde güncellenir. Karşılaştırma bu yüzden kimlikle (`ad|url`) değil adla
+yapılır; kimlikle yapılsa adresi düzeltilen istasyon "eksik" sanılıp ikinci
+kez eklenirdi — biri ölü, biri sağlam iki kopya.
+
 ### Elle eklenen kanal doğrulanır
 
 Yazım hatası aksi hâlde sessiz bir başarısızlığa dönüşüyor: kanal listeye
