@@ -39,12 +39,12 @@ val releaseKeystore = secretOf("RADYOLA_KEYSTORE_FILE", "radyola.keystoreFile")
 
 android {
     namespace = "com.aripd.radyola"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.aripd.radyola"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = buildVersionCode
         versionName = buildVersionName
     }

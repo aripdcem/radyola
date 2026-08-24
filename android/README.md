@@ -26,9 +26,9 @@ Jetpack Compose + Media3 (ExoPlayer) tabanlı internet radyo çalar.
 | | |
 |---|---|
 | Min. Android | 7.0 (API 24) |
-| Hedef / derleme SDK | 34 |
+| Hedef / derleme SDK | 35 |
 | JDK | 17 |
-| Android SDK | Platform 34, Build Tools 34.0.0 |
+| Android SDK | Platform 35, Build Tools 35.0.0 |
 
 Android Studio ile `android/` klasörünü açmanız yeterli. Komut satırı için
 `local.properties` içine SDK yolunu yazın:
