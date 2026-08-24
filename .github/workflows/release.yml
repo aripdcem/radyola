@@ -1,0 +1,140 @@
+# Sürüm yayını — `v` ile başlayan bir etiket itildiğinde çalışır.
+#
+#   git tag v1.1.0 && git push origin v1.1.0
+#
+# Sonuç: imzalı release APK'nın eklendiği bir GitHub Release.
+#
+# İmzalama: aşağıdaki secret'lar tanımlıysa kendi anahtarınızla, tanımlı
+# değilse debug anahtarıyla imzalanır (yan yükleme yine çalışır, fakat her
+# koşuda farklı bir imza üretilir — kurulu uygulamanın üzerine yazılamaz).
+#
+#   ANDROID_KEYSTORE_BASE64   base64 -w0 radyola-release.jks
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+name: Yayın
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # GitHub Release oluşturmak için
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    name: İmzalı APK ve Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Depoyu al
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gradle wrapper'ı doğrula
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Sürümü etiketten al
+        id: version
+        run: |
+          tag="$GITHUB_REF_NAME"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "code=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: İmza anahtarını çöz
+        # Secret tanımlı değilse dosya oluşmaz; Gradle debug anahtarına düşer.
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/radyola-release.jks"
+            echo "signed=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 tanımlı değil — APK debug anahtarıyla imzalanacak."
+            echo "signed=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Birim testleri
+        working-directory: android
+        run: ./gradlew testDebugUnitTest
+
+      - name: Release APK
+        working-directory: android
+        env:
+          RADYOLA_KEYSTORE_FILE: ${{ runner.temp }}/radyola-release.jks
+          RADYOLA_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RADYOLA_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RADYOLA_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          RADYOLA_VERSION_CODE: ${{ steps.version.outputs.code }}
+          RADYOLA_VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: ./gradlew assembleRelease
+
+      - name: APK'yı adlandır
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             "artifacts/radyola-${{ steps.version.outputs.name }}.apk"
+          ( cd artifacts && sha256sum *.apk > SHA256SUMS.txt )
+          cat artifacts/SHA256SUMS.txt
+
+      - name: Sürüm notlarını hazırla
+        run: |
+          previous=$(git describe --tags --abbrev=0 "${{ steps.version.outputs.tag }}^" 2>/dev/null || true)
+          {
+            echo "## Radyola ${{ steps.version.outputs.name }} — Android"
+            echo
+            echo "\`radyola-${{ steps.version.outputs.name }}.apk\` dosyasını indirip telefonunuzda açın."
+            echo "Bilinmeyen kaynaklardan kuruluma izin vermeniz gerekebilir."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Min. Android | 7.0 (API 24) |"
+            echo "| versionCode | \`${{ steps.version.outputs.code }}\` |"
+            if [ "$signed" = "true" ]; then
+              echo "| İmza | Yayın anahtarı |"
+            else
+              echo "| İmza | Debug anahtarı (yalnız yan yükleme) |"
+            fi
+            echo
+            echo "SHA-256 özetleri \`SHA256SUMS.txt\` içinde."
+            if [ -n "$previous" ]; then
+              echo
+              echo "**Değişiklikler:** $previous...${{ steps.version.outputs.tag }}"
+              echo
+              git log --pretty='- %s' "$previous..${{ steps.version.outputs.tag }}"
+            fi
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Release oluştur
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "Radyola ${{ steps.version.outputs.name }}" \
+            --notes-file release-notes.md \
+            artifacts/radyola-${{ steps.version.outputs.name }}.apk \
+            artifacts/SHA256SUMS.txt
