@@ -19,6 +19,8 @@ Jetpack Compose + Media3 (ExoPlayer) tabanlı internet radyo çalar.
   vakti gelince durur
 - **Ayarlar** — son istasyonu hatırla, açılışta otomatik çal
 - **Ses odağı** — arama gelince duraklar, kulaklık çıkınca susar
+- **Kopan yayını toparlama** — ağ hatasında bir kez sessizce yeniden
+  bağlanır; ancak art arda ikinci hatada kullanıcıya söyler
 - Açık/koyu tema, Android 13+ tek renk (monochrome) uygulama simgesi
 
 ## Gereksinimler

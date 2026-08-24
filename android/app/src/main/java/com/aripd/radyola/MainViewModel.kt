@@ -3,6 +3,7 @@ package com.aripd.radyola
 import android.app.Application
 import android.content.ComponentName
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
 import androidx.lifecycle.AndroidViewModel
@@ -82,6 +83,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var sleepTimerJob: Job? = null
     private var pendingAutoplayId: String? = null
 
+    // Hata sonrası sessiz yeniden bağlanmanın döngüye dönmemesi için:
+    // aynı istasyonda [RETRY_WINDOW_MS] içinde ikinci deneme yapılmaz.
+    private var lastRetryStationId: String? = null
+    private var lastRetryAtMs = 0L
+
     // Keşfet dizini bir kez çekilip bellekte tutulur; mod geçişi ağa çıkmasın.
     private var directory: List<RadioStation>? = null
 
@@ -134,6 +140,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            // Mobil ağda kısa kopmalar rutin: tünel, kat değişimi, Wi-Fi → hücre
+            // geçişi. İlk hatada bir kez sessizce yeniden bağlanmayı deniyoruz;
+            // seekToDefaultPosition canlı uca döndürür (BehindLiveWindow dahil).
+            // Aynı istasyonda kısa aralıkla ikinci hata gerçektir — kullanıcıya
+            // söylenir, deneme döngüsüne girilmez.
+            val player = controller
+            val stationId = _uiState.value.current?.id
+            val now = SystemClock.elapsedRealtime()
+            if (player != null && stationId != null &&
+                (stationId != lastRetryStationId || now - lastRetryAtMs > RETRY_WINDOW_MS)
+            ) {
+                lastRetryStationId = stationId
+                lastRetryAtMs = now
+                _uiState.update { it.copy(isBuffering = true) }
+                player.seekToDefaultPosition()
+                player.prepare()
+                player.play()
+                return
+            }
             _uiState.update {
                 it.copy(
                     errorMessage = "Yayın açılamadı: ${it.current?.name ?: ""}".trim(),
@@ -657,3 +682,6 @@ private const val MAX_GENRE_CHIPS = 24
 
 /** Oynatıcıya verilen sıranın üst sınırı. */
 private const val MAX_QUEUE_SIZE = 100
+
+/** Aynı istasyonda iki sessiz yeniden bağlanma arasındaki en kısa süre. */
+private const val RETRY_WINDOW_MS = 30_000L
