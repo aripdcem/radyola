@@ -1,0 +1,165 @@
+# Yayın denetimi — kuratörlü liste zamanla çürüyor (adresler taşınıyor,
+# sunucular kapanıyor) ve kimse bakmadığı için fark edilmiyor.
+#
+# GitLab'da bu bir "pipeline schedule" idi. GitHub'da zamanlama doğrudan
+# aşağıdaki `cron` ile tanımlı — arayüzden ayrıca bir şey kurmak gerekmiyor.
+#
+# Ölü yayın bulunursa iş kırmızıya döner VE `stream-health` etiketli bir issue
+# açılır/güncellenir. Kırmızı iş tek başına gözden kaçıyor; issue kaçmıyor.
+name: Yayın denetimi
+
+on:
+  schedule:
+    # Her pazartesi 04:17 UTC. Dakika bilerek 0 değil: GitHub, tam saat
+    # başlarındaki zamanlamaları yoğunluk nedeniyle geciktiriyor.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      list:
+        description: "Hangi liste denetlensin"
+        type: choice
+        options: [curated, directory]
+        default: curated
+      soft:
+        description: "Ölü yayın bulunsa da iş kırmızıya dönmesin"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: stream-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Akışları dene
+    runs-on: ubuntu-latest
+    # Keşfet dizini 3.400 kayıt taşıyor; kuratörlü liste birkaç dakika sürer.
+    timeout-minutes: 120
+
+    env:
+      LIST: ${{ inputs.list || 'curated' }}
+      SOFT: ${{ inputs.soft || false }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Denetimi çalıştır
+        id: check
+        # Rapor yüklenebilsin ve issue açılabilsin diye burada durmuyoruz;
+        # işin sonucu en sondaki adımda yansıtılıyor.
+        continue-on-error: true
+        run: |
+          args=(--json health-report.json)
+          if [ "$LIST" = "directory" ]; then
+            # Dizinde her zaman bir miktar ölü yayın var; kırmızıya çevirmek anlamsız.
+            args+=(--directory --concurrency 24 --attempts 2)
+          elif [ "$SOFT" != "true" ]; then
+            args+=(--fail-on-dead)
+          fi
+          echo "Çalıştırılıyor: node crawler/check-streams.js ${args[*]}"
+          node crawler/check-streams.js "${args[@]}"
+
+      - name: Raporu yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-report-${{ env.LIST }}-${{ github.run_number }}
+          path: health-report.json
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Özet
+        if: always()
+        run: |
+          if [ ! -f health-report.json ]; then
+            echo "Rapor üretilemedi." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node -e '
+            const r = require("./health-report.json");
+            const l = [];
+            l.push(`### Yayın denetimi — \`${r.file}\``, "");
+            l.push(`| | |`, `|---|---|`);
+            l.push(`| Çalışan | ${r.alive}/${r.total} |`);
+            l.push(`| Ölü | ${r.dead.length} |`);
+            l.push(`| Muaf (\`expectDown\`) | ${r.knownDown.length} |`, "");
+            if (r.dead.length) {
+              l.push("#### Ölü yayınlar", "", "| İstasyon | Sebep | Adres |", "|---|---|---|");
+              r.dead.forEach(d => l.push(`| ${d.title} | ${d.reason} | \`${d.url}\` |`));
+              l.push("");
+            }
+            if (r.recovered.length) {
+              l.push("#### Muaftı ama çalışıyor — `expectDown` kaldırılmalı", "");
+              r.recovered.forEach(d => l.push(`- ${d.title} (${d.expectDown})`));
+            }
+            console.log(l.join("\n"));
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ölü yayınlar için issue aç / güncelle
+        # Dizin denetiminde ölü yayın normal; yalnız kuratörlü liste için bildir.
+        if: always() && env.LIST == 'curated' && hashFiles('health-report.json') != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // github-script çalışma dizini GITHUB_WORKSPACE; rapor oradadır.
+            const report = JSON.parse(require('fs').readFileSync('health-report.json', 'utf8'));
+            if (report.dead.length === 0 && report.recovered.length === 0) {
+              core.info('Ölü yayın yok — issue açılmadı.');
+              return;
+            }
+
+            const body = [
+              `\`${report.file}\` denetlendi: **${report.alive}/${report.total}** yayın çalışıyor.`,
+              '',
+              ...(report.dead.length ? [
+                `### Ölü yayınlar (${report.dead.length})`,
+                '',
+                '| İstasyon | Sebep | Adres |',
+                '|---|---|---|',
+                ...report.dead.map(d => `| ${d.title} | ${d.reason} | \`${d.url}\` |`),
+                '',
+                'Adres güncellenemiyorsa `data/stations.json` içinden çıkarın; geçici',
+                'bir kapanma ise `"expectDown": "sebep"` alanı ekleyin.',
+                '',
+              ] : []),
+              ...(report.recovered.length ? [
+                `### Muaftı ama çalışıyor (${report.recovered.length})`,
+                '',
+                ...report.recovered.map(d => `- **${d.title}** — \`expectDown\` işareti kaldırılmalı (${d.expectDown})`),
+                '',
+              ] : []),
+              `[Koşu kaydı](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const label = 'stream-health';
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner, repo, labels: label, state: 'open', per_page: 1,
+            });
+
+            if (open.length > 0) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: open[0].number, body,
+              });
+              core.notice(`Mevcut issue güncellendi: #${open[0].number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner, repo, title: 'Ölü yayınlar — kuratörlü liste', body, labels: [label],
+              });
+              core.notice(`Issue açıldı: #${issue.number}`);
+            }
+
+      - name: Denetim sonucunu yansıt
+        if: steps.check.outcome == 'failure'
+        run: |
+          echo "::error::Denetim ölü yayın buldu (ya da çalışamadı) — ayrıntılar rapordadır."
+          exit 1

@@ -2,7 +2,10 @@ package com.aripd.radyola
 
 import android.app.Application
 import android.content.ComponentName
+import android.os.Bundle
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import androidx.core.os.bundleOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
@@ -10,6 +13,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.aripd.radyola.data.AppSettings
 import com.aripd.radyola.data.RadioStation
@@ -79,6 +83,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var sleepTimerJob: Job? = null
     private var pendingAutoplayId: String? = null
 
+    // Hata sonrası sessiz yeniden bağlanmanın döngüye dönmemesi için:
+    // aynı istasyonda [RETRY_WINDOW_MS] içinde ikinci deneme yapılmaz.
+    private var lastRetryStationId: String? = null
+    private var lastRetryAtMs = 0L
+
     // Keşfet dizini bir kez çekilip bellekte tutulur; mod geçişi ağa çıkmasın.
     private var directory: List<RadioStation>? = null
 
@@ -106,6 +115,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 mediaController.repeatMode = Player.REPEAT_MODE_ALL
                 mediaController.addListener(playerListener)
                 syncPlayerState()
+                querySleepTimer(mediaController)
                 pendingAutoplayId?.let { id ->
                     pendingAutoplayId = null
                     stationById(id)?.let { play(it) }
@@ -130,6 +140,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            // Mobil ağda kısa kopmalar rutin: tünel, kat değişimi, Wi-Fi → hücre
+            // geçişi. İlk hatada bir kez sessizce yeniden bağlanmayı deniyoruz;
+            // seekToDefaultPosition canlı uca döndürür (BehindLiveWindow dahil).
+            // Aynı istasyonda kısa aralıkla ikinci hata gerçektir — kullanıcıya
+            // söylenir, deneme döngüsüne girilmez.
+            val player = controller
+            val stationId = _uiState.value.current?.id
+            val now = SystemClock.elapsedRealtime()
+            if (player != null && stationId != null &&
+                (stationId != lastRetryStationId || now - lastRetryAtMs > RETRY_WINDOW_MS)
+            ) {
+                lastRetryStationId = stationId
+                lastRetryAtMs = now
+                _uiState.update { it.copy(isBuffering = true) }
+                player.seekToDefaultPosition()
+                player.prepare()
+                player.play()
+                return
+            }
             _uiState.update {
                 it.copy(
                     errorMessage = "Yayın açılamadı: ${it.current?.name ?: ""}".trim(),
@@ -543,23 +572,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Kuratörlü listede olup kullanıcıda olmayanları ekler.
+     * Kuratörlü listeyle farkı kapatır: yeni kanalları ekler, adresi
+     * düzeltilenlerin URL'sini günceller.
      *
-     * Tohum bir kez atıldığı için sonradan eklenen kanallar kullanıcıya
-     * ulaşmıyor. Bunu sessizce yapmıyoruz — kullanıcının bilerek çıkardığı
-     * bir istasyon geri gelmemeli, bu yüzden yalnız istendiğinde çalışır.
+     * Tohum bir kez atıldığı için sonradan eklenen kanallar da, ölü yayın
+     * düzeltmeleri de kullanıcıya kendiliğinden ulaşmıyor. Bunu sessizce
+     * yapmıyoruz — kullanıcının bilerek çıkardığı bir istasyon geri gelmemeli,
+     * bu yüzden yalnız istendiğinde çalışır.
      */
-    fun addNewCuratedStations(onResult: (Int) -> Unit) {
+    fun addNewCuratedStations(onResult: (added: Int, updated: Int) -> Unit) {
         viewModelScope.launch {
             val curated = repository.load(StationSource.CURATED)
+
+            // Önce adres düzeltmeleri: kimlik URL'yi içerdiği için güncelleme
+            // kimliği değiştirir; "son istasyon" kaydı da onunla taşınır.
+            val renames = userList.applyUrlUpdates(curated)
+            renames.firstOrNull { (oldId, _) -> oldId == _uiState.value.settings.lastStationId }
+                ?.let { (_, newId) -> settingsStore.setLastStation(newId) }
+
             val missing = userList.missingFrom(curated)
             missing.forEach { userList.add(it) }
-            if (missing.isNotEmpty()) {
+
+            if (missing.isNotEmpty() || renames.isNotEmpty()) {
                 userList.load()
                 _uiState.update { it.copy(myListIds = userList.ids) }
                 if (_uiState.value.mode == ListMode.MY_LIST) publishMyList()
             }
-            onResult(missing.size)
+            onResult(missing.size, renames.size)
         }
     }
 
@@ -567,22 +606,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── uyku zamanlayıcı ─────────────────────────────────────
 
-    /** [minutes] dakika sonra çalmayı durdurur; 0 zamanlayıcıyı iptal eder. */
+    /**
+     * [minutes] dakika sonra çalmayı durdurur; 0 zamanlayıcıyı iptal eder.
+     *
+     * Asıl sayaç serviste çalışır (bkz. [RadyolaPlaybackService]): burada
+     * tutulsaydı kullanıcı uygulamayı son kullanılanlardan kaydırdığında
+     * ViewModel'le birlikte ölür, yayın sabaha kadar çalardı — zamanlayıcının
+     * tam da önlemesi gereken senaryo. Buradaki iş yalnız ekrandaki geri sayım.
+     */
     fun setSleepTimer(minutes: Int) {
+        val c = controller ?: return
+        c.sendCustomCommand(
+            SessionCommand(RadyolaPlaybackService.CMD_SLEEP_SET, Bundle.EMPTY),
+            bundleOf(RadyolaPlaybackService.KEY_SLEEP_MINUTES to minutes)
+        )
+        startSleepDisplay(minutes, minutes * 60)
+    }
+
+    /**
+     * Servisteki zamanlayıcıyı sorup ekrandaki geri sayımı ona bağlar.
+     *
+     * Uygulama kapatılıp yeniden açıldığında zamanlayıcı serviste sürüyor
+     * olabilir; ayarlar bunu bilmezse "Kapalı" gösterir ve kullanıcı yanlışlıkla
+     * ikinci kez kurar.
+     */
+    private fun querySleepTimer(c: MediaController) {
+        val future = c.sendCustomCommand(
+            SessionCommand(RadyolaPlaybackService.CMD_SLEEP_QUERY, Bundle.EMPTY),
+            Bundle.EMPTY
+        )
+        future.addListener(
+            {
+                val result = runCatching { future.get() }.getOrNull() ?: return@addListener
+                startSleepDisplay(
+                    result.extras.getInt(RadyolaPlaybackService.KEY_SLEEP_MINUTES, 0),
+                    result.extras.getInt(RadyolaPlaybackService.KEY_SLEEP_REMAINING_SEC, 0)
+                )
+            },
+            ContextCompat.getMainExecutor(getApplication())
+        )
+    }
+
+    /** Ekrandaki geri sayım — yalnız görüntü; süre dolunca durduran taraf servis. */
+    private fun startSleepDisplay(minutes: Int, remainingSec: Int) {
         sleepTimerJob?.cancel()
-        if (minutes <= 0) {
+        if (minutes <= 0 || remainingSec <= 0) {
             _uiState.update { it.copy(sleepTimerMinutes = 0, sleepTimerRemainingSec = 0) }
             return
         }
-        _uiState.update { it.copy(sleepTimerMinutes = minutes, sleepTimerRemainingSec = minutes * 60) }
+        _uiState.update { it.copy(sleepTimerMinutes = minutes, sleepTimerRemainingSec = remainingSec) }
         sleepTimerJob = viewModelScope.launch {
-            var remaining = minutes * 60
+            var remaining = remainingSec
             while (remaining > 0) {
                 delay(1_000)
                 remaining--
                 _uiState.update { it.copy(sleepTimerRemainingSec = remaining) }
             }
-            controller?.pause()
             _uiState.update { it.copy(sleepTimerMinutes = 0, sleepTimerRemainingSec = 0) }
         }
     }
@@ -603,3 +682,6 @@ private const val MAX_GENRE_CHIPS = 24
 
 /** Oynatıcıya verilen sıranın üst sınırı. */
 private const val MAX_QUEUE_SIZE = 100
+
+/** Aynı istasyonda iki sessiz yeniden bağlanma arasındaki en kısa süre. */
+private const val RETRY_WINDOW_MS = 30_000L

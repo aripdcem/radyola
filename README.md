@@ -1,5 +1,9 @@
 # Radyola
 
+[![Android](https://github.com/aripdcem/radyola/actions/workflows/android.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/android.yml)
+[![Pages](https://github.com/aripdcem/radyola/actions/workflows/pages.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/pages.yml)
+[![Yayın denetimi](https://github.com/aripdcem/radyola/actions/workflows/stream-check.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/stream-check.yml)
+
 Çoklu platform internet radyo çalar uygulaması.
 
 ## Platformlar
@@ -147,7 +151,15 @@ bildirim ve kilit ekranı kontrolleri, favoriler ve uyku zamanlayıcı içerir.
 Kuratörlü listenin yanında ~3.400 istasyonluk **Keşfet** dizininde arama yapar.
 
 - **Konum:** [`android/`](android/)
-- **Gereksinim:** Android 7.0+ (API 24), derleme için JDK 17 + Android SDK 34
+- **Gereksinim:** Android 7.0+ (API 24), derleme için JDK 17 + Android SDK 35
+
+### Hazır APK
+
+Derlemek istemiyorsanız:
+
+- **Yayınlanan sürümler** → [Releases](https://github.com/aripdcem/radyola/releases)
+- **Her commit'in APK'sı** → [Actions → Android](https://github.com/aripdcem/radyola/actions/workflows/android.yml)
+  → bir koşu seçin → sayfanın altındaki **Artifacts**
 
 ### Derleme
 
@@ -179,6 +191,43 @@ Kablosuz hata ayıklama için önce `adb connect <IP>:<PORT>` çalıştırın.
 ```bash
 adb uninstall com.aripd.radyola
 ```
+
+---
+
+## Sürekli Tümleştirme (CI/CD)
+
+Depo GitLab'dan GitHub'a taşındı; boru hattı GitHub Actions üzerinde çalışıyor
+([`.github/workflows/`](.github/workflows/)).
+
+| İş akışı | Ne zaman | Ne yapar |
+|---|---|---|
+| [`android.yml`](.github/workflows/android.yml) | `android/` veya `data/` değiştiğinde | Birim testleri, debug + release APK → **Artifacts** (30 gün) |
+| [`release.yml`](.github/workflows/release.yml) | `v*` etiketi itildiğinde | İmzalı APK + SHA-256 özeti eklenmiş GitHub Release |
+| [`pages.yml`](.github/workflows/pages.yml) | `main`'de `web/` veya `data/` değiştiğinde | Web uygulamasını derler, `data/*.json` ile birlikte GitHub Pages'e yayınlar |
+| [`stream-check.yml`](.github/workflows/stream-check.yml) | Haftalık (Pzt 04:17 UTC) + elle | Kuratörlü listedeki akışları dener; ölü varsa issue açar |
+
+### Yeni sürüm çıkarmak
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+APK `radyola-1.1.0.apk` adıyla Release'e eklenir.
+
+### Depo ayarları (bir kez)
+
+1. **Pages** — Settings → Pages → Source: **GitHub Actions**
+2. **Özel alan adı** — DNS `radyola.aripd.com` kaydı GitHub Pages'e yöneldikten
+   sonra Settings → Secrets and variables → Actions → Variables:
+   `PAGES_CUSTOM_DOMAIN = radyola.aripd.com`.
+   Değişken tanımlı değilken site `https://aripdcem.github.io/radyola/`
+   adresinde yayınlanır — DNS taşınmadan önce yayın kesilmesin diye.
+3. **APK imzalama** (isteğe bağlı) — Settings → Secrets:
+   `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+   `ANDROID_KEY_PASSWORD`. Tanımlı değilse APK debug anahtarıyla imzalanır;
+   yan yüklenir ama her koşuda farklı bir imza üretir, yani kurulu uygulamanın
+   üzerine yazılamaz. Ayrıntı: [`android/README.md`](android/README.md#imzalama).
 
 ---
 

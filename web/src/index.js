@@ -50,6 +50,17 @@ function stationKey(s) {
   return `${s.name}|${s.url}`;
 }
 
+/**
+ * Web sitesi bağlantısı olarak kullanılabilir mi?
+ *
+ * Discover verisi radio-browser.info'dan geliyor — herkesin düzenleyebildiği
+ * bir veritabanı. `javascript:` gibi şemaları eleyip yalnız http(s) kabul
+ * ediyoruz; adres ayrıca HTML'e gömülmez, DOM üzerinden atanır (bkz. _appendRows).
+ */
+function safeWebsite(url) {
+  return /^https?:\/\//i.test(url) ? url : "";
+}
+
 /* ── CSS (loaded from external file into shadow DOM) ────── */
 const CSS_PATH = "./radyola-player.css";
 
@@ -151,6 +162,17 @@ class AripdRadyola extends HTMLElement {
 
     /* cache refs */
     this._audio = document.createElement("audio");
+    // Ölü yayına tıklayan kullanıcı aksi hâlde hiçbir şey görmüyor: play()
+    // sözü sessizce reddediliyor, çubuk "çalıyor" gibi kalıyordu.
+    this._audio.addEventListener("error", () => this._onStreamError());
+    this._audio.addEventListener("stalled", () => {
+      if (this._isPlaying) this._elBar.classList.add("is-buffering");
+    });
+    this._audio.addEventListener("playing", () => {
+      this._elBar.classList.remove("is-buffering");
+      this._setMediaSessionState("playing");
+    });
+    this._setupMediaSession();
     this._elList = this.shadowRoot.getElementById("stationList");
     this._elLocs = this.shadowRoot.getElementById("locationsBar");
     this._elGenres = this.shadowRoot.getElementById("genresBar");
@@ -411,8 +433,19 @@ class AripdRadyola extends HTMLElement {
             ${s.genre ? `<span class="station-genre">${this._esc(s.genre)}</span>` : ""}
           </div>
         </div>
-        ${s.website ? `<a class="station-ext" href="${this._esc(s.website)}" target="_blank" rel="noopener" title="Visit website">${SVG.extLink}</a>` : ""}
       `;
+
+      // Website bağlantısı HTML string'ine gömülmez: _esc tırnak kaçırmıyor,
+      // veri kaynağı da topluluk düzenlemesine açık — href'ten öznitelik
+      // enjeksiyonu mümkün olurdu. setAttribute bu sınıf hatayı yapısal kapatır.
+      const site = safeWebsite(s.website);
+      if (site) {
+        const ext = el("a", "station-ext", {
+          href: site, target: "_blank", rel: "noopener", title: "Visit website",
+        });
+        ext.innerHTML = SVG.extLink;
+        row.appendChild(ext);
+      }
 
       row.addEventListener("click", (e) => {
         if (e.target.closest(".station-ext")) return;
@@ -436,11 +469,56 @@ class AripdRadyola extends HTMLElement {
 
     this._elPName.textContent = s.name;
     this._elPLoc.textContent = s.genre ? `${s.location}  ·  ${s.genre}` : s.location;
+    this._elPLoc.classList.remove("error");
     document.title = `${s.name} — Radyola`;
     this._btnPlay.innerHTML = SVG.pause;
     this._elBar.classList.add("visible", "is-playing");
 
+    this._updateMediaSessionMetadata(s);
     this._highlightPlaying();
+  }
+
+  /** Akış açılamadı: çubuğu duraklat ve nedenini söyle. */
+  _onStreamError() {
+    if (!this._currentKey || !this._audio.error) return;
+    this._isPlaying = false;
+    this._btnPlay.innerHTML = SVG.play;
+    this._elBar.classList.remove("is-playing", "is-buffering");
+    this._elPLoc.textContent = "Stream unavailable — try another station";
+    this._elPLoc.classList.add("error");
+    this._setMediaSessionState("paused");
+    this._highlightPlaying();
+  }
+
+  /* ── Media Session API ─────────────────────────── */
+  /**
+   * Tarayıcının medya arayüzüne bağlanır: klavye medya tuşları, kulaklık
+   * tuşları ve telefonda kilit ekranı/bildirim kontrolleri.
+   */
+  _setupMediaSession() {
+    if (!("mediaSession" in navigator)) return;
+    const on = (action, handler) => {
+      // Tarayıcı tanımadığı eylemde fırlatır; desteklenenler yeter.
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* yok say */ }
+    };
+    on("play", () => this._togglePlay());
+    on("pause", () => this._togglePlay());
+    on("previoustrack", () => this._skip(-1));
+    on("nexttrack", () => this._skip(1));
+  }
+
+  _updateMediaSessionMetadata(s) {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: s.name,
+      artist: s.genre ? `${s.location} · ${s.genre}` : s.location,
+      album: "Radyola",
+    });
+    this._setMediaSessionState("playing");
+  }
+
+  _setMediaSessionState(state) {
+    if ("mediaSession" in navigator) navigator.mediaSession.playbackState = state;
   }
 
   /**
@@ -462,11 +540,13 @@ class AripdRadyola extends HTMLElement {
       this._isPlaying = true;
       this._btnPlay.innerHTML = SVG.pause;
       this._elBar.classList.add("is-playing");
+      this._setMediaSessionState("playing");
     } else {
       this._audio.pause();
       this._isPlaying = false;
       this._btnPlay.innerHTML = SVG.play;
       this._elBar.classList.remove("is-playing");
+      this._setMediaSessionState("paused");
     }
     this._highlightPlaying();
   }

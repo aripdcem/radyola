@@ -312,7 +312,7 @@ function fetchJSON(url) {
       url,
       {
         headers: {
-          "User-Agent": "Radyola-Crawler/1.0 (https://gitlab.com/aripd/radyola)",
+          "User-Agent": "Radyola-Crawler/1.0 (https://github.com/aripdcem/radyola)",
           Accept: "application/json",
         },
       },

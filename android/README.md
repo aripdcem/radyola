@@ -14,9 +14,13 @@ Jetpack Compose + Media3 (ExoPlayer) tabanlı internet radyo çalar.
   kilit ekranı kontrolleri ve kulaklık medya tuşları
 - **Arama ve filtreler** — ad / konum / tür üzerinde arama, ülke ve tür seçicileri.
   Keşfet'te liste oya göre sıralanır ve tür çipleri en sık 24 türle sınırlanır
-- **Uyku zamanlayıcı** — 15 / 30 / 45 / 60 / 90 dakika
+- **Uyku zamanlayıcı** — 15 / 30 / 45 / 60 / 90 dakika. Sayaç oynatma
+  servisinde çalışır: uygulama son kullanılanlardan kaydırılsa da yayın
+  vakti gelince durur
 - **Ayarlar** — son istasyonu hatırla, açılışta otomatik çal
 - **Ses odağı** — arama gelince duraklar, kulaklık çıkınca susar
+- **Kopan yayını toparlama** — ağ hatasında bir kez sessizce yeniden
+  bağlanır; ancak art arda ikinci hatada kullanıcıya söyler
 - Açık/koyu tema, Android 13+ tek renk (monochrome) uygulama simgesi
 
 ## Gereksinimler
@@ -24,9 +28,9 @@ Jetpack Compose + Media3 (ExoPlayer) tabanlı internet radyo çalar.
 | | |
 |---|---|
 | Min. Android | 7.0 (API 24) |
-| Hedef / derleme SDK | 34 |
+| Hedef / derleme SDK | 35 |
 | JDK | 17 |
-| Android SDK | Platform 34, Build Tools 34.0.0 |
+| Android SDK | Platform 35, Build Tools 35.0.0 |
 
 Android Studio ile `android/` klasörünü açmanız yeterli. Komut satırı için
 `local.properties` içine SDK yolunu yazın:
@@ -52,9 +56,54 @@ cd android
 ./gradlew testDebugUnitTest
 ```
 
-> Yayın yapılandırması, yan yükleme (sideload) kolay olsun diye debug anahtarıyla
-> imzalanır. Google Play'e yükleyecekseniz `app/build.gradle.kts` içinde kendi
-> `signingConfig` tanımınızı kullanın.
+## İmzalama
+
+Anahtar deposu verilmişse onunla, verilmemişse debug anahtarıyla imzalanır.
+Yol ve parolalar ortam değişkeninden ya da Gradle özelliğinden okunur:
+
+| Ortam değişkeni | Gradle özelliği | Varsayılan |
+|---|---|---|
+| `RADYOLA_KEYSTORE_FILE` | `radyola.keystoreFile` | — (yoksa debug anahtarı) |
+| `RADYOLA_KEYSTORE_PASSWORD` | `radyola.keystorePassword` | — |
+| `RADYOLA_KEY_ALIAS` | `radyola.keyAlias` | `radyola` |
+| `RADYOLA_KEY_PASSWORD` | `radyola.keyPassword` | store parolası |
+| `RADYOLA_VERSION_CODE` | `radyola.versionCode` | `1` |
+| `RADYOLA_VERSION_NAME` | `radyola.versionName` | `1.0.0` |
+
+Kendi anahtarınızı üretin:
+
+```bash
+keytool -genkeypair -v -keystore radyola-release.jks \
+    -alias radyola -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Yerelde imzalı derleme:
+
+```bash
+RADYOLA_KEYSTORE_FILE=$PWD/radyola-release.jks \
+RADYOLA_KEYSTORE_PASSWORD=... \
+./gradlew assembleRelease
+```
+
+> **Anahtar deposunu depoya koymayın.** CI'da GitHub secret olarak tutulur:
+> `base64 -w0 radyola-release.jks` çıktısını `ANDROID_KEYSTORE_BASE64`
+> secret'ına yazın (bkz. [`.github/workflows/release.yml`](../.github/workflows/release.yml)).
+
+> **Neden önemli:** debug anahtarı her makinede — ve CI'da her koşuda — yeniden
+> üretilir. Debug anahtarıyla imzalanmış iki APK farklı imza taşır; cihaz
+> ikincisini güncelleme saymaz, kullanıcı önce uygulamayı kaldırmak zorunda
+> kalır. Sürüm yayınlıyorsanız kendi anahtarınızı tanımlayın.
+
+## CI
+
+Her itmede [`android.yml`](../.github/workflows/android.yml) testleri koşar ve
+APK üretir; Actions koşusunun **Artifacts** bölümünden inilir. `v*` etiketi
+itildiğinde [`release.yml`](../.github/workflows/release.yml) imzalı APK'yı
+GitHub Release'e ekler.
+
+CI, `versionCode`'u commit sayısından türetir (`git rev-list --count HEAD`):
+monoton artar, CI koşu sayacından bağımsızdır ve aynı commit her zaman aynı
+numarayı verir.
 
 ## Cihaza Kurma
 
@@ -108,6 +157,12 @@ gelirdi. Tohum bir kez atılır; bunun bedeli, sonradan eklenen kuratörlü
 kanalların kendiliğinden gelmemesi. Ayarlardaki **"Yeni kanallara bak"** bu
 farkı elle kapatır — sessizce eklemiyoruz, çünkü kullanıcının bilerek
 çıkardığı bir istasyon geri gelmemeli.
+
+Aynı düğme **adres düzeltmelerini** de uygular: kuratörlü listede bir yayının
+URL'si değiştiyse (ölü yayın düzeltmesi) kullanıcıdaki aynı adlı kaydın adresi
+yerinde güncellenir. Karşılaştırma bu yüzden kimlikle (`ad|url`) değil adla
+yapılır; kimlikle yapılsa adresi düzeltilen istasyon "eksik" sanılıp ikinci
+kez eklenirdi — biri ölü, biri sağlam iki kopya.
 
 ### Elle eklenen kanal doğrulanır
 

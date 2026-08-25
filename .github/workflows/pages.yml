@@ -1,0 +1,89 @@
+# Web uygulaması + veri dosyaları → GitHub Pages.
+#
+# GitLab Pages'in karşılığı. Yayınlanan ağaç GitLab'daki `public/` ile birebir
+# aynı: index.html, radyola.svg, radyola-player.css, dist/ ve data/*.json.
+# Beş platformun tamamı istasyon listesini buradaki `data/` yolundan çekiyor.
+#
+# Kurulum (bir kez): Settings → Pages → Build and deployment → Source:
+# "GitHub Actions".
+#
+# Özel alan adı: DNS kaydı GitHub Pages'e yönlendikten sonra depo değişkeni
+# tanımlayın — Settings → Secrets and variables → Actions → Variables:
+#   PAGES_CUSTOM_DOMAIN = radyola.aripd.com
+# Değişken tanımlı değilken site https://<kullanıcı>.github.io/radyola/
+# adresinden yayınlanır; böylece DNS taşınmadan önce yayın kesilmez.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "data/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Yayın sırası bozulmasın: koşan bir dağıtım iptal edilmez, sıraya alınır.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Derle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Bağımlılıklar
+        working-directory: web
+        run: npm ci
+
+      - name: Derle
+        working-directory: web
+        run: npm run build
+
+      - name: public/ ağacını kur
+        run: |
+          mkdir -p public/data
+          cp web/index.html web/radyola.svg web/radyola-player.css public/
+          cp -r web/dist public/
+          cp data/*.json public/data/
+          find public -type f | sort
+
+      - name: Özel alan adı
+        if: vars.PAGES_CUSTOM_DOMAIN != ''
+        run: echo "${{ vars.PAGES_CUSTOM_DOMAIN }}" > public/CNAME
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    name: Yayınla
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

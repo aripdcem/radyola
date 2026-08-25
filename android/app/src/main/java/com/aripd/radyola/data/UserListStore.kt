@@ -80,11 +80,37 @@ class UserListStore(context: Context) {
      * Tohum bir kez atıldığı için sonraki eklemeleriniz kullanıcıya ulaşmıyor;
      * ayarlardaki "yeni kanallara bak" bunu elle kapatır. Sessizce eklemiyoruz:
      * kullanıcının bilerek çıkardığı bir istasyon geri gelmemeli.
+     *
+     * Karşılaştırma kimlikle değil **adla** yapılır: kimlik URL'yi içeriyor ve
+     * kuratörlü listede ölü yayınların adresi düzeltiliyor. Kimlikle bakılsa
+     * adresi düzeltilen istasyon "eksik" sanılıp ikinci kez eklenirdi — biri
+     * ölü, biri sağlam iki kopya. Adres farkları [applyUrlUpdates]'in işi.
      */
-    fun missingFrom(curated: List<RadioStation>): List<RadioStation> {
-        val mine = ids
-        return curated.filterNot { it.id in mine }
-    }
+    fun missingFrom(curated: List<RadioStation>): List<RadioStation> =
+        missingByName(curated, _stations.value)
+
+    /**
+     * Kuratörlü listedeki adres düzeltmelerini kullanıcı listesine uygular.
+     *
+     * Üyelik ve sıra kullanıcının malı, akış adresi verinin: kuratörlü listede
+     * bir istasyonun URL'si değiştiyse (ölü yayın düzeltmesi) kullanıcıdaki
+     * aynı adlı kaydın adresi de güncellenir — kayıt olduğu yerde kalır.
+     *
+     * Dönen liste eski → yeni kimlik eşlemesi; çağıran taraf "son istasyon"
+     * gibi kimliğe bağlı kayıtları taşıyabilsin diye.
+     */
+    suspend fun applyUrlUpdates(curated: List<RadioStation>): List<Pair<String, String>> =
+        withContext(Dispatchers.IO) {
+            val updates = curatedUrlUpdates(curated, _stations.value)
+            if (updates.isEmpty()) return@withContext emptyList()
+            val renames = ArrayList<Pair<String, String>>(updates.size)
+            val next = _stations.value.map { station ->
+                val newUrl = updates[station.id] ?: return@map station
+                station.copy(url = newUrl).also { renames.add(station.id to it.id) }
+            }
+            persist(next)
+            renames
+        }
 
     private fun persist(stations: List<RadioStation>) {
         try {
@@ -111,5 +137,38 @@ class UserListStore(context: Context) {
     private companion object {
         const val TAG = "UserListStore"
         const val FILE_NAME = "mylist.json"
+    }
+}
+
+/**
+ * Kuratörlü listede olup kullanıcı listesinde **adı** geçmeyen istasyonlar.
+ *
+ * Saf fonksiyon — birim testinde Android bağımlılığı olmadan sınanır.
+ */
+internal fun missingByName(
+    curated: List<RadioStation>,
+    mine: List<RadioStation>
+): List<RadioStation> {
+    val names = mine.mapTo(HashSet()) { it.name }
+    return curated.filterNot { it.name in names }
+}
+
+/**
+ * Kullanıcı listesindeki hangi kayıtların adresi kuratörlü listede değişmiş?
+ *
+ * Dönen eşleme: kullanıcıdaki kaydın kimliği → kuratörlü listedeki yeni adres.
+ * Ad eşleşmesi esas alınır; kuratörlü listede adlar benzersizdir
+ * (aynı ad iki kez geçerse son kayıt kazanır).
+ */
+internal fun curatedUrlUpdates(
+    curated: List<RadioStation>,
+    mine: List<RadioStation>
+): Map<String, String> {
+    val byName = curated.associateBy { it.name }
+    return buildMap {
+        mine.forEach { station ->
+            val fresh = byName[station.name] ?: return@forEach
+            if (fresh.url != station.url) put(station.id, fresh.url)
+        }
     }
 }

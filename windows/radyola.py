@@ -110,7 +110,7 @@ class RadioStation:
 
 
 def _fetch_stations_from_json() -> list[RadioStation]:
-    """GitLab'dan JSON olarak kanal listesini çeker."""
+    """Ortak JSON kaynağından kanal listesini çeker."""
     try:
         req = urllib.request.Request(
             STATIONS_JSON_URL, headers={"User-Agent": "Radyola/1.0"},

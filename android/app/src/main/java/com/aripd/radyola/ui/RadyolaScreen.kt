@@ -208,8 +208,13 @@ fun RadyolaScreen(state: UiState, viewModel: MainViewModel) {
                 onAutoplayChanged = viewModel::setAutoplayOnStart,
                 onSleepTimerSelected = viewModel::setSleepTimer,
                 onFetchCurated = {
-                    viewModel.addNewCuratedStations { added ->
-                        curatedResult = if (added > 0) "$added kanal eklendi" else "Yeni kanal yok"
+                    viewModel.addNewCuratedStations { added, updated ->
+                        curatedResult = when {
+                            added > 0 && updated > 0 -> "$added kanal eklendi, $updated adres güncellendi"
+                            added > 0 -> "$added kanal eklendi"
+                            updated > 0 -> "$updated kanalın adresi güncellendi"
+                            else -> "Yeni kanal yok"
+                        }
                     }
                 },
                 curatedResult = curatedResult
