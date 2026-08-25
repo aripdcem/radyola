@@ -1,0 +1,60 @@
+# Windows CI — PyInstaller ile tek dosya EXE'yi her değişiklikte derler.
+#
+# EXE, koşunun Artifacts bölümünden inilir (30 gün). build.bat CI'da
+# koşturulmaz: içindeki pause etkileşim bekleyip koşuyu kilitler; aynı
+# komutlar doğrudan çalıştırılır.
+name: Windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows.yml"
+  pull_request:
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exe:
+    name: EXE
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sözdizimi denetimi
+        run: python -m py_compile windows/radyola.py
+
+      - name: Bağımlılıklar
+        run: python -m pip install --upgrade pyinstaller pystray Pillow pygame
+
+      - name: EXE derle
+        working-directory: windows
+        run: >
+          pyinstaller --onefile --windowed --name Radyola
+          --hidden-import=pystray._win32 --hidden-import=PIL --hidden-import=pygame
+          radyola.py
+
+      - name: EXE'yi yükle
+        uses: actions/upload-artifact@v7
+        with:
+          name: radyola-exe-${{ github.run_number }}
+          path: windows/dist/Radyola.exe
+          retention-days: 30
+          if-no-files-found: error
