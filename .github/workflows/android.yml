@@ -76,12 +76,31 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "APK sürümü: $name (versionCode $code)"
 
+      - name: İmza anahtarını çöz
+        # Secret tanımlıysa her itişin APK'sı da yayın anahtarıyla imzalanır —
+        # artifact'tan inen APK, Releases'tekiyle aynı imzayı taşır ve üstüne
+        # kurulur. Secret yoksa dosya oluşmaz; Gradle debug anahtarına düşer.
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/radyola-release.jks"
+            echo "signed=true" >> "$GITHUB_ENV"
+          else
+            echo "signed=false" >> "$GITHUB_ENV"
+          fi
+
       - name: Birim testleri
         working-directory: android
         run: ./gradlew testDebugUnitTest
 
       - name: APK'ları derle
         working-directory: android
+        env:
+          RADYOLA_KEYSTORE_FILE: ${{ runner.temp }}/radyola-release.jks
+          RADYOLA_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RADYOLA_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RADYOLA_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: >
           ./gradlew assembleDebug assembleRelease
           -Pradyola.versionCode=${{ steps.version.outputs.code }}
@@ -123,6 +142,11 @@ jobs:
             echo "|---|---|"
             echo "| versionName | \`${{ steps.version.outputs.name }}\` |"
             echo "| versionCode | \`${{ steps.version.outputs.code }}\` |"
+            if [ "$signed" = "true" ]; then
+              echo "| İmza | Yayın anahtarı |"
+            else
+              echo "| İmza | Debug anahtarı |"
+            fi
             echo
             echo "APK'lar bu koşunun **Artifacts** bölümünde."
           } >> "$GITHUB_STEP_SUMMARY"
