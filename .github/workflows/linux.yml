@@ -1,0 +1,65 @@
+# Linux CI — .deb paketini her değişiklikte derler.
+#
+# Paket, koşunun Artifacts bölümünden inilir (30 gün saklanır). Ubuntu
+# koşucusunda bağımlılıklarıyla birlikte kurulabildiği de denenir: Depends
+# satırındaki bir yazım hatası aksi hâlde kullanıcıya kurulum anında patlar.
+name: Linux
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "linux/**"
+      - ".github/workflows/linux.yml"
+  pull_request:
+    paths:
+      - "linux/**"
+      - ".github/workflows/linux.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deb:
+    name: DEB paketi
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sözdizimi denetimi
+        run: python3 -m py_compile linux/radyola.py
+
+      - name: DEB paketini derle
+        working-directory: linux
+        run: bash build-deb.sh
+
+      - name: Paketi doğrula
+        working-directory: linux
+        run: |
+          dpkg-deb --info radyola_*_all.deb
+          dpkg-deb --contents radyola_*_all.deb
+
+      - name: Kurulum denemesi
+        working-directory: linux
+        run: |
+          sudo apt-get update
+          # --no-install-recommends: Recommends'taki appindicator eklentisi
+          # gnome-shell'in tamamını sürükler; sınanan şey Depends satırı.
+          sudo apt-get install -y --no-install-recommends ./radyola_*_all.deb
+          dpkg -s radyola
+          command -v radyola
+
+      - name: Paketi yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: radyola-deb-${{ github.run_number }}
+          path: linux/radyola_*_all.deb
+          retention-days: 30
+          if-no-files-found: error

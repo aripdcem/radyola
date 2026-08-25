@@ -1,7 +1,8 @@
 # Radyola
 
 [![Android](https://github.com/aripdcem/radyola/actions/workflows/android.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/android.yml)
-[![Pages](https://github.com/aripdcem/radyola/actions/workflows/pages.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/pages.yml)
+[![Web](https://github.com/aripdcem/radyola/actions/workflows/web.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/web.yml)
+[![Linux](https://github.com/aripdcem/radyola/actions/workflows/linux.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/linux.yml)
 [![Yayın denetimi](https://github.com/aripdcem/radyola/actions/workflows/stream-check.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/stream-check.yml)
 
 Çoklu platform internet radyo çalar uygulaması.
@@ -202,8 +203,9 @@ Depo GitLab'dan GitHub'a taşındı; boru hattı GitHub Actions üzerinde çalı
 | İş akışı | Ne zaman | Ne yapar |
 |---|---|---|
 | [`android.yml`](.github/workflows/android.yml) | `android/` veya `data/` değiştiğinde | Birim testleri, debug + release APK → **Artifacts** (30 gün) |
+| [`web.yml`](.github/workflows/web.yml) | `web/` veya `data/` değiştiğinde | Derleme her PR'da; `main`'de ayrıca GitHub Pages'e yayınlar |
+| [`linux.yml`](.github/workflows/linux.yml) | `linux/` değiştiğinde | `.deb` paketini derler, Ubuntu'da kurulumunu dener → **Artifacts** |
 | [`release.yml`](.github/workflows/release.yml) | `v*` etiketi itildiğinde | İmzalı APK + SHA-256 özeti eklenmiş GitHub Release |
-| [`pages.yml`](.github/workflows/pages.yml) | `main`'de `web/` veya `data/` değiştiğinde | Web uygulamasını derler, `data/*.json` ile birlikte GitHub Pages'e yayınlar |
 | [`stream-check.yml`](.github/workflows/stream-check.yml) | Haftalık (Pzt 04:17 UTC) + elle | Kuratörlü listedeki akışları dener; ölü varsa issue açar |
 
 ### Yeni sürüm çıkarmak
@@ -217,7 +219,8 @@ APK `radyola-1.1.0.apk` adıyla Release'e eklenir.
 
 ### Depo ayarları (bir kez)
 
-1. **Pages** — Settings → Pages → Source: **GitHub Actions**
+1. **Pages** — elle açmak gerekmez: ilk dağıtımda `web.yml` siteyi
+   "GitHub Actions" kaynağıyla kendisi açar (`configure-pages` / `enablement`)
 2. **Özel alan adı** — DNS `radyola.aripd.com` kaydı GitHub Pages'e yöneldikten
    sonra Settings → Secrets and variables → Actions → Variables:
    `PAGES_CUSTOM_DOMAIN = radyola.aripd.com`.
