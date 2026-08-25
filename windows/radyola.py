@@ -57,9 +57,12 @@ logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 # Veri Modeli
 # ──────────────────────────────────────────────
 
-STATIONS_JSON_URL = (
-    "https://radyola.aripd.com/data/stations.json"
-)
+# Adresler denenme sırasıyla: özel alan adı DNS taşımalarında kesintiye
+# düşebiliyor; GitHub Pages adresi her koşulda çalışır.
+STATIONS_JSON_URLS = [
+    "https://radyola.aripd.com/data/stations.json",
+    "https://aripdcem.github.io/radyola/data/stations.json",
+]
 
 _COUNTRY_FLAGS = {
     "türkiye": "TR", "turkey": "TR", "belgium": "BE",
@@ -112,11 +115,19 @@ class RadioStation:
 def _fetch_stations_from_json() -> list[RadioStation]:
     """Ortak JSON kaynağından kanal listesini çeker."""
     try:
-        req = urllib.request.Request(
-            STATIONS_JSON_URL, headers={"User-Agent": "Radyola/1.0"},
-        )
-        with urllib.request.urlopen(req, timeout=15) as response:
-            raw = response.read().decode("utf-8")
+        raw = None
+        for source_url in STATIONS_JSON_URLS:
+            try:
+                req = urllib.request.Request(
+                    source_url, headers={"User-Agent": "Radyola/1.0"},
+                )
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    raw = response.read().decode("utf-8")
+                break
+            except Exception as exc:
+                log.warning(f"{source_url} alınamadı ({exc}), sıradaki denenecek")
+        if raw is None:
+            raise RuntimeError("hiçbir veri adresine ulaşılamadı")
 
         data = json.loads(raw)
         stations = []

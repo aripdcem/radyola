@@ -5,7 +5,13 @@ import Foundation
 // ──────────────────────────────────────────────
 
 /// JSON URL — kanal listesi buradan çekilir
-let stationsJSONURL = "https://radyola.aripd.com/data/stations.json"
+/// Kanal listesinin adresleri, denenme sırasıyla. Özel alan adı DNS
+/// taşımalarında kesintiye düşebiliyor; GitHub Pages adresi her koşulda
+/// çalışır (özel alan adı bağlanınca GitHub oraya yönlendirir).
+let stationsJSONURLs = [
+    "https://radyola.aripd.com/data/stations.json",
+    "https://aripdcem.github.io/radyola/data/stations.json",
+]
 
 /// JSON decode için yardımcı struct
 private struct StationJSON: Codable {
@@ -112,23 +118,28 @@ struct RadioStation: Identifiable, Equatable {
 
 /// JSON kaynağından kanal listesini çeker ve parse eder.
 func fetchStations() async -> [RadioStation] {
-    guard let url = URL(string: stationsJSONURL) else {
-        return fallbackStations()
-    }
-    do {
-        var request = URLRequest(url: url, timeoutInterval: 10)
-        request.setValue("Radyola/1.0", forHTTPHeaderField: "User-Agent")
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let items = try JSONDecoder().decode([StationJSON].self, from: data)
-        let stations = items.compactMap { item -> RadioStation? in
-            guard !item.title.isEmpty, !item.url.isEmpty else { return nil }
-            return RadioStation(title: item.title, url: item.url, location: item.location ?? "", genre: item.genre ?? "")
+    for urlString in stationsJSONURLs {
+        guard let url = URL(string: urlString) else { continue }
+        do {
+            var request = URLRequest(url: url, timeoutInterval: 10)
+            request.setValue("Radyola/1.0", forHTTPHeaderField: "User-Agent")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                print("radyola: \(urlString) HTTP \(http.statusCode), sıradaki denenecek")
+                continue
+            }
+            let items = try JSONDecoder().decode([StationJSON].self, from: data)
+            let stations = items.compactMap { item -> RadioStation? in
+                guard !item.title.isEmpty, !item.url.isEmpty else { return nil }
+                return RadioStation(title: item.title, url: item.url, location: item.location ?? "", genre: item.genre ?? "")
+            }
+            if !stations.isEmpty { return stations }
+        } catch {
+            print("radyola: \(urlString) alınamadı (\(error)), sıradaki denenecek")
         }
-        return stations.isEmpty ? fallbackStations() : stations
-    } catch {
-        print("radyola: JSON verisi alınamadı (\(error)) — fallback kullanılıyor")
-        return fallbackStations()
     }
+    print("radyola: hiçbir veri adresine ulaşılamadı — fallback kullanılıyor")
+    return fallbackStations()
 }
 
 /// İnternet bağlantısı yoksa kullanılacak varsayılan istasyonlar.
