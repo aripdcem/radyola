@@ -19,6 +19,18 @@ name: Yayın
 on:
   push:
     tags: ["v*"]
+  # Elle sürüm: etiket henüz yoksa gh release create onu da oluşturur.
+  # Bu oturumdaki gibi git üzerinden etiket itemeyen ortamlar için de tek yol.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Sürüm etiketi (örn. v1.0.0)"
+        required: true
+        type: string
+
+env:
+  # Etiket itmede ref adı, elle tetiklemede girdi.
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write # GitHub Release oluşturmak için
@@ -65,7 +77,7 @@ jobs:
       - name: Sürümü etiketten al
         id: version
         run: |
-          tag="$GITHUB_REF_NAME"
+          tag="$RELEASE_TAG"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "name=${tag#v}" >> "$GITHUB_OUTPUT"
           echo "code=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
@@ -108,7 +120,9 @@ jobs:
 
       - name: Sürüm notlarını hazırla
         run: |
-          previous=$(git describe --tags --abbrev=0 "${{ steps.version.outputs.tag }}^" 2>/dev/null || true)
+          # Elle tetiklemede etiket henüz oluşmadı; aralıklar HEAD üzerinden
+          # kurulur (etiket itmede HEAD zaten etiketlenen commit).
+          previous=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
           {
             echo "## Radyola ${{ steps.version.outputs.name }} — Android"
             echo
@@ -133,7 +147,7 @@ jobs:
               echo
               echo "**Değişiklikler:** $previous...${{ steps.version.outputs.tag }}"
               echo
-              git log --pretty='- %s' "$previous..${{ steps.version.outputs.tag }}"
+              git log --pretty='- %s' "$previous..HEAD"
             fi
           } > release-notes.md
           cat release-notes.md
@@ -143,6 +157,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.version.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
             --title "Radyola ${{ steps.version.outputs.name }}" \
             --notes-file release-notes.md \
             artifacts/radyola-${{ steps.version.outputs.name }}.apk \
@@ -169,10 +184,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           cp linux/radyola_*_all.deb "radyola-${version}-linux-all.deb"
           sha256sum "radyola-${version}-linux-all.deb" > "radyola-${version}-linux-all.deb.sha256"
-          gh release upload "$GITHUB_REF_NAME" \
+          gh release upload "$RELEASE_TAG" \
             "radyola-${version}-linux-all.deb" \
             "radyola-${version}-linux-all.deb.sha256"
 
@@ -203,10 +218,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           cp windows/dist/Radyola.exe "radyola-${version}-windows.exe"
           sha256sum "radyola-${version}-windows.exe" > "radyola-${version}-windows.exe.sha256"
-          gh release upload "$GITHUB_REF_NAME" \
+          gh release upload "$RELEASE_TAG" \
             "radyola-${version}-windows.exe" \
             "radyola-${version}-windows.exe.sha256"
 
@@ -233,9 +248,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           ditto -c -k --keepParent macosx/build/Release/Radyola.app "radyola-${version}-macos.zip"
           shasum -a 256 "radyola-${version}-macos.zip" > "radyola-${version}-macos.zip.sha256"
-          gh release upload "$GITHUB_REF_NAME" \
+          gh release upload "$RELEASE_TAG" \
             "radyola-${version}-macos.zip" \
             "radyola-${version}-macos.zip.sha256"

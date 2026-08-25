@@ -219,6 +219,9 @@ git tag v1.1.0
 git push origin v1.1.0
 ```
 
+Ya da arayüzden: **Actions → Yayın → Run workflow** ve etiket adını yazın —
+etiket henüz yoksa iş akışı onu da oluşturur.
+
 Release'e dört platformun paketi eklenir: `radyola-1.1.0.apk`,
 `radyola-1.1.0-linux-all.deb`, `radyola-1.1.0-windows.exe`,
 `radyola-1.1.0-macos.zip` (macOS paketi imzasızdır; ilk açılışta
