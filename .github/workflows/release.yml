@@ -123,26 +123,31 @@ jobs:
           # Elle tetiklemede etiket henüz oluşmadı; aralıklar HEAD üzerinden
           # kurulur (etiket itmede HEAD zaten etiketlenen commit).
           previous=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          v="${{ steps.version.outputs.name }}"
           {
-            echo "## Radyola ${{ steps.version.outputs.name }} — Android"
+            echo "## Radyola ${v}"
             echo
-            echo "\`radyola-${{ steps.version.outputs.name }}.apk\` dosyasını indirip telefonunuzda açın."
-            echo "Bilinmeyen kaynaklardan kuruluma izin vermeniz gerekebilir."
+            echo "Çoklu platform internet radyo çalar — bu sürümün paketleri:"
             echo
-            echo "| | |"
-            echo "|---|---|"
-            echo "| Min. Android | 7.0 (API 24) |"
-            echo "| versionCode | \`${{ steps.version.outputs.code }}\` |"
+            echo "| Paket | Platform | Kurulum |"
+            echo "|---|---|---|"
+            echo "| \`radyola-${v}.apk\` | Android 7.0+ | İndirip açın; bilinmeyen kaynaklardan kuruluma izin verin |"
+            echo "| \`radyola-${v}-linux-all.deb\` | Debian / Ubuntu | \`sudo apt install ./radyola-${v}-linux-all.deb\` |"
+            echo "| \`radyola-${v}-windows.exe\` | Windows 10+ | Çift tıklayın; SmartScreen uyarısında **Ek bilgi → Yine de çalıştır** |"
+            echo "| \`radyola-${v}-macos.zip\` | macOS 14+ | Zip'i açıp Applications'a taşıyın; ilk açılışta **sağ tık → Aç** |"
+            echo
+            echo "🌐 Web sürümü kurulum gerektirmez: https://aripdcem.github.io/radyola/"
+            echo
+            echo "Her paketin yanında \`.sha256\` özeti var; APK'nınki \`SHA256SUMS.txt\` içinde."
+            echo "Paketler ayrı işlerce derlenir — hepsi birkaç dakika içinde tamamlanır."
+            echo
             if [ "$signed" = "true" ]; then
-              echo "| İmza | Yayın anahtarı |"
+              echo "Android paketi yayın anahtarıyla imzalı (versionCode \`${{ steps.version.outputs.code }}\`)."
             else
-              echo "| İmza | Debug anahtarı (yalnız yan yükleme) |"
+              echo "Android paketi debug anahtarıyla imzalı — yalnız yan yükleme içindir"
+              echo "(versionCode \`${{ steps.version.outputs.code }}\`). Windows ve macOS"
+              echo "paketleri imzasızdır; ilk açılış uyarıları bundandır."
             fi
-            echo
-            echo "SHA-256 özetleri \`SHA256SUMS.txt\` içinde."
-            echo
-            echo "Linux (.deb), Windows (.exe) ve macOS (.zip) paketleri ayrı"
-            echo "işlerce derlenip bu sürüme eklenir — birkaç dakika içinde görünür."
             if [ -n "$previous" ]; then
               echo
               echo "**Değişiklikler:** $previous...${{ steps.version.outputs.tag }}"
@@ -152,15 +157,25 @@ jobs:
           } > release-notes.md
           cat release-notes.md
 
-      - name: Release oluştur
+      - name: Release oluştur ya da güncelle
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --target "$GITHUB_SHA" \
-            --title "Radyola ${{ steps.version.outputs.name }}" \
-            --notes-file release-notes.md \
-            artifacts/radyola-${{ steps.version.outputs.name }}.apk \
+          tag="${{ steps.version.outputs.tag }}"
+          # Aynı etiket yeniden tetiklenirse iş düşmesin: var olan Release'in
+          # notları güncellenir, paketler --clobber ile tazelenir.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" \
+              --title "Radyola ${{ steps.version.outputs.name }}" \
+              --notes-file release-notes.md
+          else
+            gh release create "$tag" \
+              --target "$GITHUB_SHA" \
+              --title "Radyola ${{ steps.version.outputs.name }}" \
+              --notes-file release-notes.md
+          fi
+          gh release upload "$tag" --clobber \
+            "artifacts/radyola-${{ steps.version.outputs.name }}.apk" \
             artifacts/SHA256SUMS.txt
 
   # ── Diğer platform paketleri ─────────────────────────────
@@ -187,7 +202,7 @@ jobs:
           version="${RELEASE_TAG#v}"
           cp linux/radyola_*_all.deb "radyola-${version}-linux-all.deb"
           sha256sum "radyola-${version}-linux-all.deb" > "radyola-${version}-linux-all.deb.sha256"
-          gh release upload "$RELEASE_TAG" \
+          gh release upload "$RELEASE_TAG" --clobber \
             "radyola-${version}-linux-all.deb" \
             "radyola-${version}-linux-all.deb.sha256"
 
@@ -221,7 +236,7 @@ jobs:
           version="${RELEASE_TAG#v}"
           cp windows/dist/Radyola.exe "radyola-${version}-windows.exe"
           sha256sum "radyola-${version}-windows.exe" > "radyola-${version}-windows.exe.sha256"
-          gh release upload "$RELEASE_TAG" \
+          gh release upload "$RELEASE_TAG" --clobber \
             "radyola-${version}-windows.exe" \
             "radyola-${version}-windows.exe.sha256"
 
@@ -251,6 +266,6 @@ jobs:
           version="${RELEASE_TAG#v}"
           ditto -c -k --keepParent macosx/build/Release/Radyola.app "radyola-${version}-macos.zip"
           shasum -a 256 "radyola-${version}-macos.zip" > "radyola-${version}-macos.zip.sha256"
-          gh release upload "$RELEASE_TAG" \
+          gh release upload "$RELEASE_TAG" --clobber \
             "radyola-${version}-macos.zip" \
             "radyola-${version}-macos.zip.sha256"
