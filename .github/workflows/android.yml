@@ -54,9 +54,10 @@ jobs:
       - name: Android SDK
         uses: android-actions/setup-android@v4
         with:
-          # Koşucu imajı bunları zaten taşıyor; açıkça istemek imaj değişince
-          # derlemenin sessizce bozulmasını engelliyor.
-          packages: "platform-tools platforms;android-37"
+          # Yalnız platform-tools: android-37 platformu sdkmanager'ın koşucu
+          # kanalında henüz listelenmiyor; AGP eksik platformu derleme
+          # sırasında kendi depo çözümlemesiyle indiriyor.
+          packages: "platform-tools"
 
       - name: Gradle
         uses: gradle/actions/setup-gradle@v4

@@ -2,7 +2,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    // AGP 9'dan beri Kotlin desteği yerleşik; kotlin-android eklentisi
+    // uygulanırsa derleme "artık gerekli değil" hatasıyla durur.
     alias(libs.plugins.kotlin.compose)
 }
 
