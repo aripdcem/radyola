@@ -1,6 +1,9 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    // AGP 9'dan beri Kotlin desteği yerleşik; kotlin-android eklentisi
+    // uygulanırsa derleme "artık gerekli değil" hatasıyla durur.
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -39,7 +42,11 @@ val releaseKeystore = secretOf("RADYOLA_KEYSTORE_FILE", "radyola.keystoreFile")
 
 android {
     namespace = "com.aripd.radyola"
-    compileSdk = 35
+    // Derleme SDK'sı bağımlılıkların istediği en yüksek sürümü izler
+    // (androidx.core 1.19 / Compose 1.12 → 37). targetSdk bilerek geride:
+    // compileSdk yalnız derlemede görünen API'yi, targetSdk çalışma zamanı
+    // davranışını değiştirir — ikisini aynı anda yükseltmiyoruz.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.aripd.radyola"
@@ -81,9 +88,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // AGP 9, android.kotlinOptions bloğunu kaldırdı; hedef JVM sürümü artık
+    // Kotlin eklentisinin kendi DSL'inden ayarlanıyor (aşağıdaki kotlin bloğu).
 
     buildFeatures {
         compose = true
@@ -91,6 +97,12 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
