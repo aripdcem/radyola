@@ -1,18 +1,19 @@
-# Web uygulaması + veri dosyaları → GitHub Pages.
+# Web CI + GitHub Pages dağıtımı — GitLab Pages'in karşılığı.
 #
-# GitLab Pages'in karşılığı. Yayınlanan ağaç GitLab'daki `public/` ile birebir
-# aynı: index.html, radyola.svg, radyola-player.css, dist/ ve data/*.json.
-# Beş platformun tamamı istasyon listesini buradaki `data/` yolundan çekiyor.
+# Derleme her PR'da koşar; dağıtım yalnız main'e itmede ve elle tetiklemede.
+# Yayınlanan ağaç GitLab'daki `public/` ile birebir aynı: index.html,
+# radyola.svg, radyola-player.css, dist/ ve data/*.json. Beş platformun tamamı
+# istasyon listesini bu sitedeki `data/` yolundan çekiyor.
 #
-# Kurulum (bir kez): Settings → Pages → Build and deployment → Source:
-# "GitHub Actions".
+# Pages'i elle açmak gerekmez: ilk dağıtımda configure-pages (enablement)
+# siteyi "GitHub Actions" kaynağıyla kendisi açar.
 #
 # Özel alan adı: DNS kaydı GitHub Pages'e yönlendikten sonra depo değişkeni
 # tanımlayın — Settings → Secrets and variables → Actions → Variables:
 #   PAGES_CUSTOM_DOMAIN = radyola.aripd.com
 # Değişken tanımlı değilken site https://<kullanıcı>.github.io/radyola/
 # adresinden yayınlanır; böylece DNS taşınmadan önce yayın kesilmez.
-name: Pages
+name: Web
 
 on:
   push:
@@ -20,7 +21,12 @@ on:
     paths:
       - "web/**"
       - "data/**"
-      - ".github/workflows/pages.yml"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "data/**"
+      - ".github/workflows/web.yml"
   workflow_dispatch:
 
 permissions:
@@ -28,10 +34,11 @@ permissions:
   pages: write
   id-token: write
 
-# Yayın sırası bozulmasın: koşan bir dağıtım iptal edilmez, sıraya alınır.
+# PR derlemelerinde üst üste binen koşunun eskisi iptal edilir; dağıtımlar
+# asla iptal edilmez, sıraya girer.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: web-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -69,15 +76,15 @@ jobs:
         if: vars.PAGES_CUSTOM_DOMAIN != ''
         run: echo "${{ vars.PAGES_CUSTOM_DOMAIN }}" > public/CNAME
 
-      - uses: actions/configure-pages@v5
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
 
   deploy:
-    name: Yayınla
+    name: Pages'e yayınla
     needs: build
+    # PR'da yalnız derleme yapılır; dağıtım main'e itmede ya da elle tetiklemede.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -85,5 +92,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Pages'i yapılandır (kapalıysa aç)
+        uses: actions/configure-pages@v5
+        with:
+          # Site depoda hiç açılmamışsa ilk koşuda "GitHub Actions" kaynağıyla
+          # açılır; Settings → Pages'te elle bir şey seçmek gerekmez.
+          enablement: true
+
       - id: deployment
         uses: actions/deploy-pages@v4
