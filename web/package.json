@@ -13,7 +13,7 @@
   "main": "dist/js/index.js",
   "module": "dist/js/index.js",
   "dependencies": {
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.2",
     "fuse.js": "^7.5.0",
     "rimraf": "^6.0.1"
   },
