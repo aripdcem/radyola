@@ -6,13 +6,21 @@ import Fuse from "fuse.js";
  * Ayrı tutulmalarının sebebi: elle seçilmiş 35 istasyon 3.400'ün içinde
  * kaybolur. Kuratörlü liste açılışta yüklenir, dizin yalnız istenirse çekilir.
  */
+// Adresler denenme sırasıyla: özel alan adı DNS taşımalarında kesintiye
+// düşebiliyor; GitHub Pages adresi her koşulda çalışır (özel alan adı
+// bağlanınca GitHub oraya yönlendirir).
+const DATA_HOSTS = [
+  "https://radyola.aripd.com/data",
+  "https://aripdcem.github.io/radyola/data",
+];
+
 const SOURCES = {
   curated: {
-    url: "https://radyola.aripd.com/data/stations.json",
+    urls: DATA_HOSTS.map((h) => `${h}/stations.json`),
     label: "Curated",
   },
   directory: {
-    url: "https://radyola.aripd.com/data/directory.json",
+    urls: DATA_HOSTS.map((h) => `${h}/directory.json`),
     label: "Discover",
   },
 };
@@ -202,6 +210,21 @@ class AripdRadyola extends HTMLElement {
   }
 
   /* ── data ─────────────────────────── */
+  /** Adresleri sırayla dener; ilk başarılı JSON yanıtı kazanır. */
+  async _fetchFirstReachable(urls) {
+    let lastError;
+    for (const url of urls) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError;
+  }
+
   async _fetchData(source = this._source) {
     // Daha önce çekilmişse ağa çıkma: kaynak geçişi anında olsun.
     if (this._lists[source]) {
@@ -211,9 +234,7 @@ class AripdRadyola extends HTMLElement {
 
     this._elList.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     try {
-      const res = await fetch(SOURCES[source].url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
+      const json = await this._fetchFirstReachable(SOURCES[source].urls);
 
       const stations = json
         .map((r) => ({

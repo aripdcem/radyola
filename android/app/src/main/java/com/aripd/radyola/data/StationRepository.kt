@@ -16,13 +16,27 @@ import java.net.URL
  *
  * Kullanıcının kendi listesi burada yok — o yereldir, [UserListStore] tutar.
  */
-enum class StationSource(val url: String, internal val cacheName: String) {
+enum class StationSource(val urls: List<String>, internal val cacheName: String) {
     /** Kuratörlü liste. Yalnız ilk açılış tohumu ve "yeni kanallara bak" için. */
-    CURATED("https://radyola.aripd.com/data/stations.json", "stations.json"),
+    CURATED(dataUrls("stations.json"), "stations.json"),
 
     /** radio-browser'dan derlenen ~3.400 istasyon. Keşfet modunda çekilir. */
-    DIRECTORY("https://radyola.aripd.com/data/directory.json", "directory.json")
+    DIRECTORY(dataUrls("directory.json"), "directory.json")
 }
+
+/**
+ * Veri dosyasının adresleri, denenme sırasıyla.
+ *
+ * Özel alan adı DNS taşımalarında kesintiye düşebiliyor (GitLab → GitHub
+ * geçişinde düştü ve uygulama gömülü yedeğe kaldı). GitHub Pages adresi bu
+ * yüzden her kaynağın yedeği: site oradan yayınlanıyor ve özel alan adı
+ * bağlandığında GitHub onu yönlendiriyor — yani bu adres hiçbir
+ * yapılandırmada ölmüyor.
+ */
+private fun dataUrls(file: String) = listOf(
+    "https://radyola.aripd.com/data/$file",
+    "https://aripdcem.github.io/radyola/data/$file"
+)
 
 /** Ekranda gösterilen liste. */
 enum class ListMode {
@@ -68,14 +82,18 @@ class StationRepository(context: Context) {
      * denemede yedek listeye düşmek yerine bir şans daha veriyoruz.
      */
     private suspend fun fetchWithRetry(source: StationSource): List<RadioStation>? {
-        fetchFromNetwork(source)?.let { return it }
+        fetchFirstReachable(source)?.let { return it }
         delay(RETRY_DELAY_MS)
-        return fetchFromNetwork(source)
+        return fetchFirstReachable(source)
     }
 
-    private fun fetchFromNetwork(source: StationSource): List<RadioStation>? {
+    /** Kaynağın adreslerini sırayla dener; ilk başarılı yanıt kazanır. */
+    private fun fetchFirstReachable(source: StationSource): List<RadioStation>? =
+        source.urls.firstNotNullOfOrNull { url -> fetchFromNetwork(source, url) }
+
+    private fun fetchFromNetwork(source: StationSource, url: String): List<RadioStation>? {
         return try {
-            val connection = (URL(source.url).openConnection() as HttpURLConnection).apply {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
                 readTimeout = 20_000
                 instanceFollowRedirects = true
