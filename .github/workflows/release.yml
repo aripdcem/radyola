@@ -2,7 +2,9 @@
 #
 #   git tag v1.1.0 && git push origin v1.1.0
 #
-# Sonuç: imzalı release APK'nın eklendiği bir GitHub Release.
+# Sonuç: bir GitHub Release — apk işi Release'i oluşturup APK'yı ekler,
+# ardından linux/windows/macos işleri kendi paketlerini (.deb, .exe,
+# macOS .zip) aynı Release'e yükler.
 #
 # İmzalama: aşağıdaki secret'lar tanımlıysa kendi anahtarınızla, tanımlı
 # değilse debug anahtarıyla imzalanır (yan yükleme yine çalışır, fakat her
@@ -124,6 +126,9 @@ jobs:
             fi
             echo
             echo "SHA-256 özetleri \`SHA256SUMS.txt\` içinde."
+            echo
+            echo "Linux (.deb), Windows (.exe) ve macOS (.zip) paketleri ayrı"
+            echo "işlerce derlenip bu sürüme eklenir — birkaç dakika içinde görünür."
             if [ -n "$previous" ]; then
               echo
               echo "**Değişiklikler:** $previous...${{ steps.version.outputs.tag }}"
@@ -142,3 +147,95 @@ jobs:
             --notes-file release-notes.md \
             artifacts/radyola-${{ steps.version.outputs.name }}.apk \
             artifacts/SHA256SUMS.txt
+
+  # ── Diğer platform paketleri ─────────────────────────────
+  # Üç iş de Release oluştuktan sonra koşar ve dosyasını ona ekler.
+  # Biri düşerse diğerleri etkilenmez; Release eksik platformla kalır ve iş
+  # kırmızı görünür — yeniden koşturmak eksiği tamamlar.
+
+  linux-deb:
+    name: Linux .deb
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: DEB paketini derle
+        working-directory: linux
+        run: bash build-deb.sh
+
+      - name: Release'e ekle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp linux/radyola_*_all.deb "radyola-${version}-linux-all.deb"
+          sha256sum "radyola-${version}-linux-all.deb" > "radyola-${version}-linux-all.deb.sha256"
+          gh release upload "$GITHUB_REF_NAME" \
+            "radyola-${version}-linux-all.deb" \
+            "radyola-${version}-linux-all.deb.sha256"
+
+  windows-exe:
+    name: Windows .exe
+    needs: apk
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: EXE derle
+        shell: bash
+        run: |
+          python -m pip install --upgrade pyinstaller pystray Pillow pygame
+          cd windows
+          pyinstaller --onefile --windowed --name Radyola \
+            --hidden-import=pystray._win32 --hidden-import=PIL --hidden-import=pygame \
+            radyola.py
+
+      - name: Release'e ekle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp windows/dist/Radyola.exe "radyola-${version}-windows.exe"
+          sha256sum "radyola-${version}-windows.exe" > "radyola-${version}-windows.exe.sha256"
+          gh release upload "$GITHUB_REF_NAME" \
+            "radyola-${version}-windows.exe" \
+            "radyola-${version}-windows.exe.sha256"
+
+  macos-app:
+    name: macOS .app
+    needs: apk
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Derle (imzasız)
+        # Apple geliştirici sertifikası yok; ilk açılışta sağ tık → Aç gerekir.
+        run: >
+          xcodebuild
+          -project macosx/Radyola.xcodeproj
+          -target Radyola
+          -configuration Release
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGN_IDENTITY=""
+          build
+
+      - name: Release'e ekle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ditto -c -k --keepParent macosx/build/Release/Radyola.app "radyola-${version}-macos.zip"
+          shasum -a 256 "radyola-${version}-macos.zip" > "radyola-${version}-macos.zip.sha256"
+          gh release upload "$GITHUB_REF_NAME" \
+            "radyola-${version}-macos.zip" \
+            "radyola-${version}-macos.zip.sha256"

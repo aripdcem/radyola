@@ -30,6 +30,7 @@ struct RadyolaApp: App {
             }
         } label: {
             menuBarLabel
+                .task { await loadStations() }
         }
     }
 
@@ -44,16 +45,17 @@ struct RadyolaApp: App {
         }
     }
 
-    /// Uygulama başladığında istasyonları yükle ve autoplay uygula.
-    init() {
-        Task {
-            let fetched = await fetchStations()
-            await MainActor.run {
-                stations = fetched
-                isLoading = false
-                applyStartupSettings()
-            }
-        }
+    /// Uygulama başladığında istasyonları yükler ve açılış ayarlarını uygular.
+    ///
+    /// Yükleme `init`'te değil burada: `init` sırasında `@State` henüz
+    /// kurulmadığından kaçan closure'ın `self`'i yakalaması Swift 6'da
+    /// derleme hatası. Menü çubuğu etiketi uygulamayla birlikte çizildiği
+    /// için `.task` açılışta hemen çalışır — menünün açılmasını beklemez.
+    @MainActor
+    private func loadStations() async {
+        stations = await fetchStations()
+        isLoading = false
+        applyStartupSettings()
     }
 
     /// Sonraki/önceki istasyona geçiş.

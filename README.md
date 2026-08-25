@@ -3,6 +3,8 @@
 [![Android](https://github.com/aripdcem/radyola/actions/workflows/android.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/android.yml)
 [![Web](https://github.com/aripdcem/radyola/actions/workflows/web.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/web.yml)
 [![Linux](https://github.com/aripdcem/radyola/actions/workflows/linux.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/linux.yml)
+[![Windows](https://github.com/aripdcem/radyola/actions/workflows/windows.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/windows.yml)
+[![macOS](https://github.com/aripdcem/radyola/actions/workflows/macos.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/macos.yml)
 [![Yayın denetimi](https://github.com/aripdcem/radyola/actions/workflows/stream-check.yml/badge.svg)](https://github.com/aripdcem/radyola/actions/workflows/stream-check.yml)
 
 Çoklu platform internet radyo çalar uygulaması.
@@ -205,7 +207,9 @@ Depo GitLab'dan GitHub'a taşındı; boru hattı GitHub Actions üzerinde çalı
 | [`android.yml`](.github/workflows/android.yml) | `android/` veya `data/` değiştiğinde | Birim testleri, debug + release APK → **Artifacts** (30 gün) |
 | [`web.yml`](.github/workflows/web.yml) | `web/` veya `data/` değiştiğinde | Derleme her PR'da; `main`'de ayrıca GitHub Pages'e yayınlar |
 | [`linux.yml`](.github/workflows/linux.yml) | `linux/` değiştiğinde | `.deb` paketini derler, Ubuntu'da kurulumunu dener → **Artifacts** |
-| [`release.yml`](.github/workflows/release.yml) | `v*` etiketi itildiğinde | İmzalı APK + SHA-256 özeti eklenmiş GitHub Release |
+| [`windows.yml`](.github/workflows/windows.yml) | `windows/` değiştiğinde | PyInstaller ile `Radyola.exe` → **Artifacts** |
+| [`macos.yml`](.github/workflows/macos.yml) | `macosx/` değiştiğinde | `xcodebuild` ile imzasız `.app` (zip) → **Artifacts** |
+| [`release.yml`](.github/workflows/release.yml) | `v*` etiketi itildiğinde | GitHub Release: APK + `.deb` + `.exe` + macOS `.zip`, SHA-256 özetleriyle |
 | [`stream-check.yml`](.github/workflows/stream-check.yml) | Haftalık (Pzt 04:17 UTC) + elle | Kuratörlü listedeki akışları dener; ölü varsa issue açar |
 
 ### Yeni sürüm çıkarmak
@@ -215,7 +219,10 @@ git tag v1.1.0
 git push origin v1.1.0
 ```
 
-APK `radyola-1.1.0.apk` adıyla Release'e eklenir.
+Release'e dört platformun paketi eklenir: `radyola-1.1.0.apk`,
+`radyola-1.1.0-linux-all.deb`, `radyola-1.1.0-windows.exe`,
+`radyola-1.1.0-macos.zip` (macOS paketi imzasızdır; ilk açılışta
+sağ tık → Aç gerekir).
 
 ### Depo ayarları (bir kez)
 

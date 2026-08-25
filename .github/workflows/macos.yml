@@ -1,0 +1,56 @@
+# macOS CI — menü çubuğu uygulamasını her değişiklikte derler.
+#
+# Apple geliştirici sertifikası olmadan İMZASIZ derlenir: kurulum sonrası ilk
+# açılışta Gatekeeper uyarısını sağ tık → Aç ile geçmek gerekir. Projede
+# paylaşılan şema olmadığı için xcodebuild -target ile çağrılır.
+name: macOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "macosx/**"
+      - ".github/workflows/macos.yml"
+  pull_request:
+    paths:
+      - "macosx/**"
+      - ".github/workflows/macos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Uygulama
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Derle (imzasız)
+        run: >
+          xcodebuild
+          -project macosx/Radyola.xcodeproj
+          -target Radyola
+          -configuration Release
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGN_IDENTITY=""
+          build
+
+      - name: Paketle
+        # ditto, .app paketini kaynak öznitelikleriyle birlikte doğru zip'ler.
+        run: ditto -c -k --keepParent macosx/build/Release/Radyola.app Radyola-macos.zip
+
+      - name: Uygulamayı yükle
+        uses: actions/upload-artifact@v7
+        with:
+          name: radyola-macos-${{ github.run_number }}
+          path: Radyola-macos.zip
+          retention-days: 30
+          if-no-files-found: error

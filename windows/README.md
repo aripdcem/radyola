@@ -2,6 +2,13 @@
 
 **Radyola**, Linux [Radyola](../linux/) uygulamasının Windows native karşılığıdır. System tray (pystray) + pygame (SDL2_mixer) tabanlı bir internet radyo çalar uygulamasıdır. Harici yazılım kurulumu gerektirmez.
 
+## Hazır EXE
+
+Derlemek istemiyorsanız: her değişiklikte CI EXE'yi derler —
+[Actions → Windows](https://github.com/aripdcem/radyola/actions/workflows/windows.yml)
+→ bir koşu seçin → **Artifacts**. Sürüm etiketlerinde EXE,
+[Releases](https://github.com/aripdcem/radyola/releases) sayfasına da eklenir.
+
 ## Özellikler
 
 - **Dinamik istasyon listesi** (tüm platformlarla ortak JSON kaynağı)
