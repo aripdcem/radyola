@@ -6,10 +6,14 @@ import Fuse from "fuse.js";
  * Ayrı tutulmalarının sebebi: elle seçilmiş 35 istasyon 3.400'ün içinde
  * kaybolur. Kuratörlü liste açılışta yüklenir, dizin yalnız istenirse çekilir.
  */
-// Adresler denenme sırasıyla: özel alan adı DNS taşımalarında kesintiye
-// düşebiliyor; GitHub Pages adresi her koşulda çalışır (özel alan adı
-// bağlanınca GitHub oraya yönlendirir).
+// Adresler denenme sırasıyla: Pages dağıtımı data/'yı sitenin yanına koyuyor
+// (web.yml `public/` ağacı), o yüzden önce aynı kökenli göreli yol — ağ
+// koşulundan bağımsız, her zaman siteyle aynı yaşta. Bileşen başka bir sayfaya
+// gömülüyse 404 olur ve mutlak adreslere düşülür: özel alan adı DNS
+// taşımalarında kesintiye düşebiliyor; GitHub Pages adresi her koşulda çalışır
+// (özel alan adı bağlanınca GitHub oraya yönlendirir).
 const DATA_HOSTS = [
+  "./data",
   "https://radyola.aripd.com/data",
   "https://aripdcem.github.io/radyola/data",
 ];
@@ -23,7 +27,18 @@ const SOURCES = {
     urls: DATA_HOSTS.map((h) => `${h}/directory.json`),
     label: "Discover",
   },
+  // Ağdan gelmez: kayıtlar tam hâliyle localStorage'da (bkz. _persistFavorites).
+  favorites: {
+    urls: [],
+    label: "Favorites",
+  },
 };
+
+/** Favori istasyonların localStorage anahtarı. */
+const FAVORITES_KEY = "radyola.favorites.v1";
+
+/** Ses düzeyinin localStorage anahtarı. */
+const VOLUME_KEY = "radyola.volume.v1";
 
 /** Dizinde ilk anda basılan satır sayısı; gerisi kaydırdıkça eklenir. */
 const PAGE_SIZE = 60;
@@ -69,6 +84,44 @@ function safeWebsite(url) {
   return /^https?:\/\//i.test(url) ? url : "";
 }
 
+/**
+ * Sayfa HTTPS'ten sunulurken http:// akışı tarayıcı engeller (karışık içerik) —
+ * dizindeki 3.400 istasyonun ~1.900'ü böyle. Şemayı https'e çevirip deniyoruz:
+ * sunucu TLS konuşuyorsa çalar; konuşmuyorsa hata yoluna düşer ve kullanıcıya
+ * asıl neden söylenir (bkz. audio error dinleyicisi).
+ */
+function playableUrl(url) {
+  return isInsecure(url) ? "https://" + url.slice("http://".length) : url;
+}
+
+/** HTTPS sayfada engellenecek (yalnız http:// yayınlayan) akış mı? */
+function isInsecure(url) {
+  return location.protocol === "https:" && url.startsWith("http://");
+}
+
+/** HLS akışı mı? Dizin verisi işaretliyor; kuratörlü listede uzantıya bakılır. */
+function isHlsStream(s) {
+  return s.hls || /\.m3u8(\?|$)/i.test(s.url);
+}
+
+/* localStorage gizli pencerede ya da veri engelli tarayıcıda fırlatabilir;
+   kalıcılık bir kolaylık, yokluğu uygulamayı düşürmemeli. */
+function storeRead(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key));
+  } catch {
+    return null;
+  }
+}
+
+function storeWrite(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* yok say */
+  }
+}
+
 /* ── CSS (loaded from external file into shadow DOM) ────── */
 const CSS_PATH = "./radyola-player.css";
 
@@ -89,6 +142,7 @@ const SVG = {
   vol: `<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
   prev: `<svg viewBox="0 0 24 24"><path d="M19 20L9 12l10-8v16zM5 4v16"/></svg>`,
   next: `<svg viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4zM19 4v16"/></svg>`,
+  heart: `<svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
 };
 
 /* ══════════════════════════════════════════════════════════ */
@@ -107,8 +161,21 @@ class AripdRadyola extends HTMLElement {
     this._activeFilter = null;
     this._activeGenre = null;
     this._currentKey = null;
+    this._currentStation = null;
     this._isPlaying = false;
     this._searchTimer = null;
+    this._hls = null;        // aktif hls.js örneği (yalnız HLS çalarken)
+    this._hlsToken = 0;      // geciken dinamik import eski istasyona bağlanmasın
+
+    // Favoriler: anahtar → tam istasyon kaydı. Tam kayıt saklanır ki sekme,
+    // 1,2 MB'lık dizin hiç inmeden de açılabilsin.
+    this._favorites = new Map();
+    const saved = storeRead(FAVORITES_KEY);
+    if (Array.isArray(saved)) {
+      saved.forEach((s) => {
+        if (s && s.name && s.url) this._favorites.set(stationKey(s), s);
+      });
+    }
   }
 
   connectedCallback() {
@@ -131,6 +198,7 @@ class AripdRadyola extends HTMLElement {
         <div class="source-toggle" id="sourceToggle" role="tablist" aria-label="Station list">
           <button class="source-btn active" data-source="curated" role="tab" aria-selected="true">Curated</button>
           <button class="source-btn" data-source="directory" role="tab" aria-selected="false">Discover</button>
+          <button class="source-btn" data-source="favorites" role="tab" aria-selected="false">Favorites</button>
         </div>
         <div class="search-wrap">
           ${SVG.search}
@@ -172,7 +240,13 @@ class AripdRadyola extends HTMLElement {
     this._audio = document.createElement("audio");
     // Ölü yayına tıklayan kullanıcı aksi hâlde hiçbir şey görmüyor: play()
     // sözü sessizce reddediliyor, çubuk "çalıyor" gibi kalıyordu.
-    this._audio.addEventListener("error", () => this._onStreamError());
+    this._audio.addEventListener("error", () => {
+      if (!this._audio.error) return;
+      // http-only akış https'e yükseltilerek denendi (bkz. playableUrl);
+      // sunucu TLS konuşmuyorsa buraya düşer — asıl nedeni söyle.
+      const insecure = this._currentStation && isInsecure(this._currentStation.url);
+      this._streamFailed(insecure ? "HTTP-only stream — blocked by the browser" : undefined);
+    });
     this._audio.addEventListener("stalled", () => {
       if (this._isPlaying) this._elBar.classList.add("is-buffering");
     });
@@ -196,6 +270,13 @@ class AripdRadyola extends HTMLElement {
 
     /* events */
     this._elSearch.addEventListener("input", () => this._onSearch());
+    this._elSearch.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this._elSearch.value) {
+        this._elSearch.value = "";
+        this._applyFilters();
+        e.stopPropagation();
+      }
+    });
     this._elToggle.addEventListener("click", (e) => {
       const btn = e.target.closest(".source-btn");
       if (btn) this._setSource(btn.dataset.source);
@@ -205,8 +286,27 @@ class AripdRadyola extends HTMLElement {
     this._btnNext.addEventListener("click", () => this._skip(1));
     this._volSlider.addEventListener("input", (e) => {
       this._audio.volume = parseFloat(e.target.value);
+      storeWrite(VOLUME_KEY, this._audio.volume);
     });
-    this._audio.volume = 0.8;
+
+    // "/" aramaya odaklanır — bir metin alanına yazılmıyorsa. Shadow DOM'da
+    // hedefi document.activeElement değil composedPath verir.
+    this._onDocKey = (e) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.composedPath()[0];
+      const typing =
+        t instanceof HTMLElement &&
+        (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+      if (typing) return;
+      e.preventDefault();
+      this._elSearch.focus();
+    };
+    document.addEventListener("keydown", this._onDocKey);
+
+    const savedVol = storeRead(VOLUME_KEY);
+    this._audio.volume =
+      typeof savedVol === "number" && savedVol >= 0 && savedVol <= 1 ? savedVol : 0.8;
+    this._volSlider.value = String(this._audio.volume);
   }
 
   /* ── data ─────────────────────────── */
@@ -226,6 +326,20 @@ class AripdRadyola extends HTMLElement {
   }
 
   async _fetchData(source = this._source) {
+    // Favoriler her seferinde localStorage'daki haritadan kurulur — ağ yok,
+    // bayat kopya yok (kalp eklenip çıkarıldıkça harita değişiyor).
+    if (source === "favorites") {
+      const favs = [...this._favorites.values()].map((s) => ({ ...s }));
+      favs.forEach((s) => {
+        s.flag = flagOf(s.countryCode);
+        s.id = stationKey(s);
+        s.search = `${s.name} ${s.location} ${s.genre}`;
+      });
+      this._lists.favorites = favs;
+      if (this._source === source) this._useList(source);
+      return;
+    }
+
     // Daha önce çekilmişse ağa çıkma: kaynak geçişi anında olsun.
     if (this._lists[source]) {
       this._useList(source);
@@ -242,9 +356,15 @@ class AripdRadyola extends HTMLElement {
           url: r.url || "",
           website: r.website || "",
           location: r.location || "",
+          countryCode: r.countryCode || "",
           flag: flagOf(r.countryCode),
           genre: r.genre || "",
           votes: r.votes || 0,
+          // Dizin crawler'ı akış biçimini de yazıyor; satır rozetlerinde
+          // gösterilir. Kuratörlü listede bu alanlar yok — boş kalır.
+          codec: r.codec && r.codec !== "UNKNOWN" ? r.codec : "",
+          bitrate: r.bitrate || 0,
+          hls: r.hls === true,
         }))
         .filter((s) => s.name && s.url.startsWith("http"));
 
@@ -292,8 +412,11 @@ class AripdRadyola extends HTMLElement {
       b.classList.toggle("active", active);
       b.setAttribute("aria-selected", String(active));
     });
-    this._elSearch.placeholder =
-      source === "directory" ? "Search thousands of stations..." : "Search stations...";
+    this._elSearch.placeholder = {
+      curated: "Search stations...",
+      directory: "Search thousands of stations...",
+      favorites: "Search favorites...",
+    }[source];
     this._fetchData(source);
   }
 
@@ -411,7 +534,11 @@ class AripdRadyola extends HTMLElement {
     this._rendered = 0;
 
     if (this._filtered.length === 0) {
-      this._elList.innerHTML = `<div class="empty-state">No stations found</div>`;
+      const msg =
+        this._source === "favorites" && this._stations.length === 0
+          ? "No favorites yet — tap the ♥ on any station to keep it here"
+          : "No stations found";
+      this._elList.innerHTML = `<div class="empty-state">${msg}</div>`;
       return;
     }
 
@@ -439,8 +566,19 @@ class AripdRadyola extends HTMLElement {
 
   _appendRows(stations) {
     stations.forEach((s) => {
-      const row = el("div", "station" + (s.id === this._currentKey ? " playing" : ""));
+      // Satır gerçek bir düğme değil (içinde kalp ve site bağlantısı var,
+      // düğme içinde düğme geçersiz olurdu) — klavye için role+tabindex+keydown.
+      const row = el("div", "station" + (s.id === this._currentKey ? " playing" : ""), {
+        role: "button",
+        tabindex: "0",
+      });
       row.dataset.id = s.id;
+      row.setAttribute("aria-label", `Play ${s.name}`);
+
+      // "AAC · 128 kbps" — dizin verisinde var, kuratörlü listede boş.
+      const quality = [s.codec, s.bitrate ? `${s.bitrate} kbps` : ""]
+        .filter(Boolean)
+        .join(" · ");
 
       row.innerHTML = `
         <div class="station-icon">
@@ -452,9 +590,23 @@ class AripdRadyola extends HTMLElement {
           <div class="station-meta">
             <span class="station-loc">${this._esc(s.location)}</span>
             ${s.genre ? `<span class="station-genre">${this._esc(s.genre)}</span>` : ""}
+            ${quality ? `<span class="station-quality">${this._esc(quality)}</span>` : ""}
+            ${isInsecure(s.url) ? `<span class="station-http" title="HTTP-only stream — may not play in the browser">HTTP</span>` : ""}
           </div>
         </div>
       `;
+
+      const fav = el("button", "station-fav" + (this._favorites.has(s.id) ? " active" : ""), {
+        "aria-pressed": String(this._favorites.has(s.id)),
+        title: "Favorite",
+      });
+      fav.setAttribute("aria-label", `Favorite ${s.name}`);
+      fav.innerHTML = SVG.heart;
+      fav.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._toggleFavorite(s, fav);
+      });
+      row.appendChild(fav);
 
       // Website bağlantısı HTML string'ine gömülmez: _esc tırnak kaçırmıyor,
       // veri kaynağı da topluluk düzenlemesine açık — href'ten öznitelik
@@ -469,11 +621,35 @@ class AripdRadyola extends HTMLElement {
       }
 
       row.addEventListener("click", (e) => {
-        if (e.target.closest(".station-ext")) return;
+        if (e.target.closest(".station-ext, .station-fav")) return;
+        this._playStation(s.id);
+      });
+      row.addEventListener("keydown", (e) => {
+        // Kalbin/bağlantının üzerindeki Enter kendi işini yapsın.
+        if (e.target !== row || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
         this._playStation(s.id);
       });
       this._elList.appendChild(row);
     });
+  }
+
+  /* ── favorites ─────────────────────────── */
+  _toggleFavorite(s, btn) {
+    const key = stationKey(s);
+    const nowActive = !this._favorites.has(key);
+    if (nowActive) {
+      // id/search türetilebilir alanlar, saklamaya değmez.
+      const { id, search, ...record } = s;
+      this._favorites.set(key, record);
+    } else {
+      this._favorites.delete(key);
+    }
+    storeWrite(FAVORITES_KEY, [...this._favorites.values()]);
+    btn.classList.toggle("active", nowActive);
+    btn.setAttribute("aria-pressed", String(nowActive));
+    // Favoriler sekmesi açıkken kalbi kaldırılan satır listeden de düşsün.
+    if (this._source === "favorites" && !nowActive) this._fetchData("favorites");
   }
 
   /* ── playback ─────────────────────────── */
@@ -482,11 +658,20 @@ class AripdRadyola extends HTMLElement {
     if (!s) return;
 
     this._currentKey = id;
-    this._audio.pause();
-    this._audio.src = s.url;
-    this._audio.load();
-    this._audio.play().catch(() => {});
+    this._currentStation = s;
+    this._teardownStream();
     this._isPlaying = true;
+
+    const src = playableUrl(s.url);
+    // Safari HLS'i doğal çözer; Chrome/Firefox'un <audio>'su çözemez, MSE
+    // üzerinden hls.js gerekir.
+    if (isHlsStream(s) && !this._audio.canPlayType("application/vnd.apple.mpegurl")) {
+      this._playHls(src);
+    } else {
+      this._audio.src = src;
+      this._audio.load();
+      this._audio.play().catch(() => {});
+    }
 
     this._elPName.textContent = s.name;
     this._elPLoc.textContent = s.genre ? `${s.location}  ·  ${s.genre}` : s.location;
@@ -499,13 +684,53 @@ class AripdRadyola extends HTMLElement {
     this._highlightPlaying();
   }
 
+  /** Önceki akışı söker: hls.js örneği, kaynak, bekleyen import bağlanması. */
+  _teardownStream() {
+    this._hlsToken++;
+    if (this._hls) {
+      this._hls.destroy();
+      this._hls = null;
+    }
+    this._audio.pause();
+    this._audio.removeAttribute("src");
+  }
+
+  /**
+   * hls.js ilk HLS istasyonuna kadar indirilmez: dinamik import, esbuild
+   * `splitting` ile ayrı bir parça üretiyor; MP3/AAC dinleyen kullanıcı
+   * kitaplığın bedelini hiç ödemiyor.
+   */
+  async _playHls(src) {
+    const token = this._hlsToken;
+    let Hls;
+    try {
+      ({ default: Hls } = await import("hls.js"));
+    } catch {
+      this._streamFailed("Could not load HLS support — check your connection");
+      return;
+    }
+    // Import beklerken kullanıcı başka istasyona geçtiyse buna bağlanma.
+    if (token !== this._hlsToken) return;
+    if (!Hls.isSupported()) {
+      this._streamFailed("This browser cannot play HLS streams");
+      return;
+    }
+    this._hls = new Hls();
+    this._hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (data.fatal) this._streamFailed();
+    });
+    this._hls.loadSource(src);
+    this._hls.attachMedia(this._audio);
+    this._audio.play().catch(() => {});
+  }
+
   /** Akış açılamadı: çubuğu duraklat ve nedenini söyle. */
-  _onStreamError() {
-    if (!this._currentKey || !this._audio.error) return;
+  _streamFailed(message) {
+    if (!this._currentKey) return;
     this._isPlaying = false;
     this._btnPlay.innerHTML = SVG.play;
     this._elBar.classList.remove("is-playing", "is-buffering");
-    this._elPLoc.textContent = "Stream unavailable — try another station";
+    this._elPLoc.textContent = message || "Stream unavailable — try another station";
     this._elPLoc.classList.add("error");
     this._setMediaSessionState("paused");
     this._highlightPlaying();
@@ -588,10 +813,10 @@ class AripdRadyola extends HTMLElement {
   }
 
   disconnectedCallback() {
-    this._audio.pause();
-    this._audio.src = "";
+    this._teardownStream();
     clearTimeout(this._searchTimer);
     this._observer?.disconnect();
+    document.removeEventListener("keydown", this._onDocKey);
   }
 }
 
