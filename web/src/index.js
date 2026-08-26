@@ -122,6 +122,90 @@ function storeWrite(key, value) {
   }
 }
 
+/* ── i18n ─────────────────────────────────────────────────── */
+/**
+ * İki dil, tek tablo. Seçim sırası: <aripd-radyola lang="tr|en"> özniteliği
+ * (gömen sayfa karar verebilsin), yoksa tarayıcı dili. Sözcük dizilişi dile
+ * göre değiştiği için ad taşıyan etiketler fonksiyon (playLabel, favLabel).
+ */
+const LANGS = {
+  en: {
+    tagline: "Curated internet radio stations from around the world",
+    tabCurated: "Curated",
+    tabDiscover: "Discover",
+    tabFavorites: "Favorites",
+    searchCurated: "Search stations...",
+    searchDirectory: "Search thousands of stations...",
+    searchFavorites: "Search favorites...",
+    searchAria: "Search stations",
+    clearSearch: "Clear search",
+    stationList: "Station list",
+    all: "All",
+    allGenres: "All Genres",
+    noStations: "No stations found",
+    noFavorites: "No favorites yet — tap the ♥ on any station to keep it here",
+    loadFailed: "Failed to load stations.",
+    retry: "Try again",
+    selectStation: "Select a station",
+    errGeneric: "Stream unavailable — try another station",
+    errHttp: "HTTP-only stream — blocked by the browser",
+    errHlsLoad: "Could not load HLS support — check your connection",
+    errHlsUnsupported: "This browser cannot play HLS streams",
+    httpTitle: "HTTP-only stream — may not play in the browser",
+    website: "Visit website",
+    favorite: "Favorite",
+    prevStation: "Previous station",
+    nextStation: "Next station",
+    playPause: "Play/Pause",
+    volume: "Volume",
+    share: "Share station",
+    linkCopied: "Link copied",
+    playLabel: (name) => `Play ${name}`,
+    favLabel: (name) => `Favorite ${name}`,
+  },
+  tr: {
+    tagline: "Dünyanın dört bir yanından seçme internet radyoları",
+    tabCurated: "Seçki",
+    tabDiscover: "Keşfet",
+    tabFavorites: "Favoriler",
+    searchCurated: "İstasyon ara...",
+    searchDirectory: "Binlerce istasyonda ara...",
+    searchFavorites: "Favorilerde ara...",
+    searchAria: "İstasyon ara",
+    clearSearch: "Aramayı temizle",
+    stationList: "İstasyon listesi",
+    all: "Tümü",
+    allGenres: "Tüm Türler",
+    noStations: "İstasyon bulunamadı",
+    noFavorites: "Henüz favori yok — istasyonların ♥ simgesine dokun",
+    loadFailed: "İstasyonlar yüklenemedi.",
+    retry: "Tekrar dene",
+    selectStation: "Bir istasyon seç",
+    errGeneric: "Yayın açılamadı — başka bir istasyon dene",
+    errHttp: "Yalnız HTTP yayını — tarayıcı engelledi",
+    errHlsLoad: "HLS desteği yüklenemedi — bağlantını kontrol et",
+    errHlsUnsupported: "Bu tarayıcı HLS akışı çalamıyor",
+    httpTitle: "Yalnız HTTP yayını — tarayıcıda çalmayabilir",
+    website: "Siteye git",
+    favorite: "Favori",
+    prevStation: "Önceki istasyon",
+    nextStation: "Sonraki istasyon",
+    playPause: "Çal/Duraklat",
+    volume: "Ses düzeyi",
+    share: "İstasyonu paylaş",
+    linkCopied: "Bağlantı kopyalandı",
+    playLabel: (name) => `${name} çal`,
+    favLabel: (name) => `${name} favorilere`,
+  },
+};
+
+function pickLang(host) {
+  const attr = (host.getAttribute("lang") || "").toLowerCase();
+  if (attr.startsWith("tr")) return "tr";
+  if (attr.startsWith("en")) return "en";
+  return (navigator.language || "en").toLowerCase().startsWith("tr") ? "tr" : "en";
+}
+
 /* ── CSS (loaded from external file into shadow DOM) ────── */
 const CSS_PATH = "./radyola-player.css";
 
@@ -143,6 +227,8 @@ const SVG = {
   prev: `<svg viewBox="0 0 24 24"><path d="M19 20L9 12l10-8v16zM5 4v16"/></svg>`,
   next: `<svg viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4zM19 4v16"/></svg>`,
   heart: `<svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  share: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="10.49" x2="15.42" y2="6.51"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
 };
 
 /* ══════════════════════════════════════════════════════════ */
@@ -179,6 +265,12 @@ class AripdRadyola extends HTMLElement {
   }
 
   connectedCallback() {
+    // Öznitelikler kurucuda henüz garanti değil; dil seçimi burada yapılır.
+    this._t = LANGS[pickLang(this)];
+    // #s=<istasyon anahtarı> derin bağlantısı: liste yüklenince seçilir
+    // (çalınmaz — kullanıcı hareketi olmadan tarayıcı zaten izin vermez).
+    const hash = location.hash.match(/^#s=(.+)$/);
+    this._pendingLink = hash ? decodeURIComponent(hash[1]) : null;
     this._render();
     this._fetchData();
   }
@@ -186,23 +278,27 @@ class AripdRadyola extends HTMLElement {
   /* ── render skeleton ─────────────────────────── */
   _render() {
     const style = createStyleLink();
+    const t = this._t;
 
     const root = el("div", "radyola-root");
+    // Ekran okuyucular için dil, ev sahibi sayfaya dokunmadan bileşende işaretli.
+    root.setAttribute("lang", t === LANGS.tr ? "tr" : "en");
     root.innerHTML = `
       <div class="ambient-bg"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
       <div class="app">
         <header class="header">
           <div class="logo">${SVG.radio}<span>Radyola</span></div>
-          <p>Curated internet radio stations from around the world</p>
+          <p>${t.tagline}</p>
         </header>
-        <div class="source-toggle" id="sourceToggle" role="tablist" aria-label="Station list">
-          <button class="source-btn active" data-source="curated" role="tab" aria-selected="true">Curated</button>
-          <button class="source-btn" data-source="directory" role="tab" aria-selected="false">Discover</button>
-          <button class="source-btn" data-source="favorites" role="tab" aria-selected="false">Favorites</button>
+        <div class="source-toggle" id="sourceToggle" role="tablist" aria-label="${t.stationList}">
+          <button class="source-btn active" data-source="curated" role="tab" aria-selected="true">${t.tabCurated}</button>
+          <button class="source-btn" data-source="directory" role="tab" aria-selected="false">${t.tabDiscover}</button>
+          <button class="source-btn" data-source="favorites" role="tab" aria-selected="false">${t.tabFavorites}</button>
         </div>
         <div class="search-wrap">
           ${SVG.search}
-          <input type="text" placeholder="Search stations..." id="searchInput" aria-label="Search stations">
+          <input type="text" placeholder="${t.searchCurated}" id="searchInput" aria-label="${t.searchAria}">
+          <button class="search-clear" id="searchClear" aria-label="${t.clearSearch}" title="${t.clearSearch}">${SVG.close}</button>
         </div>
         <div class="locations" id="locationsBar"></div>
         <div class="locations" id="genresBar"></div>
@@ -217,16 +313,17 @@ class AripdRadyola extends HTMLElement {
             ${SVG.radio}
           </div>
           <div class="player-info">
-            <div class="player-name" id="pName">Select a station</div>
+            <div class="player-name" id="pName">${t.selectStation}</div>
             <div class="player-loc" id="pLoc">—</div>
           </div>
           <div class="player-controls">
-            <button class="ctrl-btn" id="btnPrev" aria-label="Previous station">${SVG.prev}</button>
-            <button class="ctrl-btn play-btn" id="btnPlay" aria-label="Play/Pause">${SVG.play}</button>
-            <button class="ctrl-btn" id="btnNext" aria-label="Next station">${SVG.next}</button>
+            <button class="ctrl-btn" id="btnPrev" aria-label="${t.prevStation}">${SVG.prev}</button>
+            <button class="ctrl-btn play-btn" id="btnPlay" aria-label="${t.playPause}">${SVG.play}</button>
+            <button class="ctrl-btn" id="btnNext" aria-label="${t.nextStation}">${SVG.next}</button>
+            <button class="ctrl-btn share-btn" id="btnShare" aria-label="${t.share}" title="${t.share}">${SVG.share}</button>
             <div class="vol-wrap">
               ${SVG.vol}
-              <input type="range" class="vol-slider" id="volSlider" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
+              <input type="range" class="vol-slider" id="volSlider" min="0" max="1" step="0.01" value="0.8" aria-label="${t.volume}">
             </div>
           </div>
         </div>
@@ -245,7 +342,7 @@ class AripdRadyola extends HTMLElement {
       // http-only akış https'e yükseltilerek denendi (bkz. playableUrl);
       // sunucu TLS konuşmuyorsa buraya düşer — asıl nedeni söyle.
       const insecure = this._currentStation && isInsecure(this._currentStation.url);
-      this._streamFailed(insecure ? "HTTP-only stream — blocked by the browser" : undefined);
+      this._streamFailed(insecure ? this._t.errHttp : undefined);
     });
     this._audio.addEventListener("stalled", () => {
       if (this._isPlaying) this._elBar.classList.add("is-buffering");
@@ -266,17 +363,26 @@ class AripdRadyola extends HTMLElement {
     this._btnPlay = this.shadowRoot.getElementById("btnPlay");
     this._btnPrev = this.shadowRoot.getElementById("btnPrev");
     this._btnNext = this.shadowRoot.getElementById("btnNext");
+    this._btnShare = this.shadowRoot.getElementById("btnShare");
     this._volSlider = this.shadowRoot.getElementById("volSlider");
+    this._elClear = this.shadowRoot.getElementById("searchClear");
 
     /* events */
-    this._elSearch.addEventListener("input", () => this._onSearch());
+    this._elSearch.addEventListener("input", () => {
+      this._elClear.classList.toggle("visible", this._elSearch.value.length > 0);
+      this._onSearch();
+    });
     this._elSearch.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && this._elSearch.value) {
-        this._elSearch.value = "";
-        this._applyFilters();
+        this._clearSearch();
         e.stopPropagation();
       }
     });
+    this._elClear.addEventListener("click", () => {
+      this._clearSearch();
+      this._elSearch.focus();
+    });
+    this._btnShare.addEventListener("click", () => this._shareStation());
     this._elToggle.addEventListener("click", (e) => {
       const btn = e.target.closest(".source-btn");
       if (btn) this._setSource(btn.dataset.source);
@@ -381,7 +487,11 @@ class AripdRadyola extends HTMLElement {
       if (this._source === source) this._useList(source);
     } catch (err) {
       if (this._source !== source) return;
-      this._elList.innerHTML = `<div class="empty-state">Failed to load stations. Please try again.</div>`;
+      this._elList.innerHTML = `<div class="empty-state">${this._t.loadFailed}</div>`;
+      const retry = el("button", "retry-btn");
+      retry.textContent = this._t.retry;
+      retry.addEventListener("click", () => this._fetchData(source));
+      this._elList.firstElementChild.appendChild(retry);
     }
   }
 
@@ -398,6 +508,27 @@ class AripdRadyola extends HTMLElement {
     this._buildLocations();
     this._buildGenres();
     this._applyFilters();
+    this._resolvePendingLink();
+  }
+
+  /**
+   * Derin bağlantı: #s=<anahtar> istasyonu bulununca duraklatılmış seçilir.
+   * Kuratörlü listede yoksa dizin arka planda bir kez çekilir (görünüm
+   * değişmez; _fetchData sonucu yalnız aktif kaynaksa ekrana bağlar).
+   */
+  _resolvePendingLink() {
+    if (!this._pendingLink) return;
+    const id = this._pendingLink;
+    const s = this._findStation(id);
+    if (s) {
+      this._pendingLink = null;
+      this._playStation(id, { autoplay: false });
+      return;
+    }
+    if (!this._lists.directory && !this._linkDirectoryRequested) {
+      this._linkDirectoryRequested = true;
+      this._fetchData("directory").then(() => this._resolvePendingLink());
+    }
   }
 
   /** Curated ↔ Discover geçişi. */
@@ -412,12 +543,19 @@ class AripdRadyola extends HTMLElement {
       b.classList.toggle("active", active);
       b.setAttribute("aria-selected", String(active));
     });
+    this._elClear.classList.remove("visible");
     this._elSearch.placeholder = {
-      curated: "Search stations...",
-      directory: "Search thousands of stations...",
-      favorites: "Search favorites...",
+      curated: this._t.searchCurated,
+      directory: this._t.searchDirectory,
+      favorites: this._t.searchFavorites,
     }[source];
     this._fetchData(source);
+  }
+
+  _clearSearch() {
+    this._elSearch.value = "";
+    this._elClear.classList.remove("visible");
+    this._applyFilters();
   }
 
   /* ── location filter pills ─────────────────────────── */
@@ -536,8 +674,8 @@ class AripdRadyola extends HTMLElement {
     if (this._filtered.length === 0) {
       const msg =
         this._source === "favorites" && this._stations.length === 0
-          ? "No favorites yet — tap the ♥ on any station to keep it here"
-          : "No stations found";
+          ? this._t.noFavorites
+          : this._t.noStations;
       this._elList.innerHTML = `<div class="empty-state">${msg}</div>`;
       return;
     }
@@ -573,7 +711,7 @@ class AripdRadyola extends HTMLElement {
         tabindex: "0",
       });
       row.dataset.id = s.id;
-      row.setAttribute("aria-label", `Play ${s.name}`);
+      row.setAttribute("aria-label", this._t.playLabel(s.name));
 
       // "AAC · 128 kbps" — dizin verisinde var, kuratörlü listede boş.
       const quality = [s.codec, s.bitrate ? `${s.bitrate} kbps` : ""]
@@ -591,16 +729,16 @@ class AripdRadyola extends HTMLElement {
             <span class="station-loc">${this._esc(s.location)}</span>
             ${s.genre ? `<span class="station-genre">${this._esc(s.genre)}</span>` : ""}
             ${quality ? `<span class="station-quality">${this._esc(quality)}</span>` : ""}
-            ${isInsecure(s.url) ? `<span class="station-http" title="HTTP-only stream — may not play in the browser">HTTP</span>` : ""}
+            ${isInsecure(s.url) ? `<span class="station-http" title="${this._t.httpTitle}">HTTP</span>` : ""}
           </div>
         </div>
       `;
 
       const fav = el("button", "station-fav" + (this._favorites.has(s.id) ? " active" : ""), {
         "aria-pressed": String(this._favorites.has(s.id)),
-        title: "Favorite",
+        title: this._t.favorite,
       });
-      fav.setAttribute("aria-label", `Favorite ${s.name}`);
+      fav.setAttribute("aria-label", this._t.favLabel(s.name));
       fav.innerHTML = SVG.heart;
       fav.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -614,7 +752,7 @@ class AripdRadyola extends HTMLElement {
       const site = safeWebsite(s.website);
       if (site) {
         const ext = el("a", "station-ext", {
-          href: site, target: "_blank", rel: "noopener", title: "Visit website",
+          href: site, target: "_blank", rel: "noopener", title: this._t.website,
         });
         ext.innerHTML = SVG.extLink;
         row.appendChild(ext);
@@ -653,35 +791,82 @@ class AripdRadyola extends HTMLElement {
   }
 
   /* ── playback ─────────────────────────── */
-  _playStation(id) {
-    const s = this._stations.find((st) => st.id === id);
+  /** Önce aktif listede, sonra yüklü öbür listelerde arar (derin bağlantı
+      dizinden bir istasyonu, görünüm kuratörlüyken seçebilir). */
+  _findStation(id) {
+    return (
+      this._stations.find((st) => st.id === id) ||
+      Object.values(this._lists)
+        .flat()
+        .find((st) => st.id === id)
+    );
+  }
+
+  _playStation(id, { autoplay = true } = {}) {
+    const s = this._findStation(id);
     if (!s) return;
 
     this._currentKey = id;
     this._currentStation = s;
     this._teardownStream();
-    this._isPlaying = true;
+    this._isPlaying = autoplay;
 
-    const src = playableUrl(s.url);
-    // Safari HLS'i doğal çözer; Chrome/Firefox'un <audio>'su çözemez, MSE
-    // üzerinden hls.js gerekir.
-    if (isHlsStream(s) && !this._audio.canPlayType("application/vnd.apple.mpegurl")) {
-      this._playHls(src);
-    } else {
-      this._audio.src = src;
-      this._audio.load();
-      this._audio.play().catch(() => {});
+    if (autoplay) {
+      const src = playableUrl(s.url);
+      // Safari HLS'i doğal çözer; Chrome/Firefox'un <audio>'su çözemez, MSE
+      // üzerinden hls.js gerekir.
+      if (isHlsStream(s) && !this._audio.canPlayType("application/vnd.apple.mpegurl")) {
+        this._playHls(src);
+      } else {
+        this._audio.src = src;
+        this._audio.load();
+        this._audio.play().catch(() => {});
+      }
     }
+    // autoplay=false: derin bağlantıyla gelinen istasyon çubukta hazır bekler;
+    // kullanıcı çal deyince _togglePlay akışı sıfırdan kurar. Tarayıcılar
+    // kullanıcı hareketi olmadan sesi zaten başlatmaz.
+
+    // Adres çubuğu hep çalanı gösterir — kopyalanan bağlantı istasyonu taşır.
+    // replaceState: her istasyon geçmişe ayrı kayıt olmasın.
+    history.replaceState(null, "", "#s=" + encodeURIComponent(s.id));
 
     this._elPName.textContent = s.name;
     this._elPLoc.textContent = s.genre ? `${s.location}  ·  ${s.genre}` : s.location;
     this._elPLoc.classList.remove("error");
     document.title = `${s.name} — Radyola`;
-    this._btnPlay.innerHTML = SVG.pause;
-    this._elBar.classList.add("visible", "is-playing");
+    this._btnPlay.innerHTML = autoplay ? SVG.pause : SVG.play;
+    this._elBar.classList.add("visible");
+    this._elBar.classList.toggle("is-playing", autoplay);
 
     this._updateMediaSessionMetadata(s);
+    this._setMediaSessionState(autoplay ? "playing" : "paused");
     this._highlightPlaying();
+  }
+
+  /** Çalan (ya da seçili) istasyonun bağlantısını paylaş: yerel paylaşım
+      menüsü varsa o, yoksa panoya kopyala + kısa geri bildirim. */
+  async _shareStation() {
+    const s = this._currentStation;
+    if (!s) return;
+    const url = location.href;
+    if (navigator.share) {
+      navigator.share({ title: `${s.name} — Radyola`, url }).catch(() => {});
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      return; // pano izni yok: sessizce vazgeç
+    }
+    clearTimeout(this._shareTimer);
+    const original = this._elPLoc.textContent;
+    this._elPLoc.textContent = this._t.linkCopied;
+    this._shareTimer = setTimeout(() => {
+      if (this._elPLoc.textContent === this._t.linkCopied) {
+        this._elPLoc.textContent = original;
+      }
+    }, 1600);
   }
 
   /** Önceki akışı söker: hls.js örneği, kaynak, bekleyen import bağlanması. */
@@ -706,13 +891,13 @@ class AripdRadyola extends HTMLElement {
     try {
       ({ default: Hls } = await import("hls.js"));
     } catch {
-      this._streamFailed("Could not load HLS support — check your connection");
+      this._streamFailed(this._t.errHlsLoad);
       return;
     }
     // Import beklerken kullanıcı başka istasyona geçtiyse buna bağlanma.
     if (token !== this._hlsToken) return;
     if (!Hls.isSupported()) {
-      this._streamFailed("This browser cannot play HLS streams");
+      this._streamFailed(this._t.errHlsUnsupported);
       return;
     }
     this._hls = new Hls();
@@ -730,7 +915,7 @@ class AripdRadyola extends HTMLElement {
     this._isPlaying = false;
     this._btnPlay.innerHTML = SVG.play;
     this._elBar.classList.remove("is-playing", "is-buffering");
-    this._elPLoc.textContent = message || "Stream unavailable — try another station";
+    this._elPLoc.textContent = message || this._t.errGeneric;
     this._elPLoc.classList.add("error");
     this._setMediaSessionState("paused");
     this._highlightPlaying();
@@ -760,7 +945,6 @@ class AripdRadyola extends HTMLElement {
       artist: s.genre ? `${s.location} · ${s.genre}` : s.location,
       album: "Radyola",
     });
-    this._setMediaSessionState("playing");
   }
 
   _setMediaSessionState(state) {
@@ -781,6 +965,12 @@ class AripdRadyola extends HTMLElement {
 
   _togglePlay() {
     if (!this._currentKey) return;
+    // Derin bağlantıyla duraklatılmış seçildiyse kaynak henüz bağlı değil:
+    // ilk "çal" akışı sıfırdan kurar (HLS/https yükseltme yolları dahil).
+    if (!this._audio.currentSrc && !this._hls) {
+      this._playStation(this._currentKey);
+      return;
+    }
     if (this._audio.paused) {
       this._audio.play().catch(() => {});
       this._isPlaying = true;
@@ -815,6 +1005,7 @@ class AripdRadyola extends HTMLElement {
   disconnectedCallback() {
     this._teardownStream();
     clearTimeout(this._searchTimer);
+    clearTimeout(this._shareTimer);
     this._observer?.disconnect();
     document.removeEventListener("keydown", this._onDocKey);
   }

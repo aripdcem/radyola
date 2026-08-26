@@ -85,6 +85,19 @@
   box-shadow: 0 0 0 3px rgba(129,140,248,.12);
 }
 
+/* Temizle (×): kutuda metin varken belirir. */
+.search-clear {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; border: none; border-radius: 8px; padding: 0;
+  background: transparent; color: #6b6b8a; cursor: pointer;
+  display: none; align-items: center; justify-content: center;
+  transition: color .2s;
+}
+.search-clear.visible { display: flex; }
+.search-clear svg { width: 14px; height: 14px; }
+.search-clear:hover { color: #c4c4da; }
+.search-clear:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
+
 /* ── location pills ─────────────────────────── */
 /* Tek satır, yatay kaydırmalı şerit.
    Sarmalarsa 160 ülke çipi listeyi ekranın metrelerce altına itiyordu. */
@@ -241,6 +254,15 @@
 .empty-state {
   text-align: center; padding: 60px 20px; color: #6b6b8a; font-size: 14px;
 }
+.retry-btn {
+  display: block; margin: 16px auto 0; padding: 9px 22px;
+  border: 1px solid rgba(129,140,248,.4); border-radius: 100px;
+  background: rgba(129,140,248,.12); color: #a5b4fc;
+  font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background .2s, color .2s;
+}
+.retry-btn:hover { background: rgba(129,140,248,.22); color: #c7d2fe; }
+.retry-btn:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
 
 /* ── player bar (sticky bottom) ─────────────────────────── */
 .player-bar {
