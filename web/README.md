@@ -5,11 +5,23 @@ kullanır, sayfanın stilini etkilemez ve ondan etkilenmez.
 
 ## Özellikler
 
-- **İki liste** — *Curated* (elle bakılan ~35 istasyon, açılışta yüklenir) ve
-  *Discover* (~3.400 istasyonluk dizin, ilk geçişte çekilir). İkisi de diğer
-  platformlarla ortak JSON kaynağından gelir ([`data/`](../data/)).
-- Bulanık arama (Fuse.js), ülke ve tür şeritleri, ISO kodundan türetilen bayraklar
-- Alt oynatıcı çubuğu: çal/duraklat, önceki/sonraki, ses seviyesi
+- **Üç liste** — *Curated* (elle bakılan ~35 istasyon, açılışta yüklenir),
+  *Discover* (~3.400 istasyonluk dizin, ilk geçişte çekilir) ve *Favorites*
+  (kalp ile seçilenler; tam kayıt `localStorage`'da tutulur, dizin inmeden
+  çalışır). İlk ikisi diğer platformlarla ortak JSON kaynağından gelir
+  ([`data/`](../data/)).
+- **HLS desteği** — `.m3u8` akışları Safari'de doğal, Chrome/Firefox'ta
+  [hls.js](https://github.com/video-dev/hls.js) ile çalar. Kitaplık ayrı bir
+  parça olarak derlenir ve ilk HLS istasyonuna kadar ağdan istenmez.
+- **Karışık içerik onarımı** — dizindeki ~1.900 istasyon yalnız `http://`
+  yayınlıyor; HTTPS sayfada tarayıcı bunları engeller. Çalarken şema `https`'e
+  yükseltilir (sunucu TLS konuşuyorsa kurtulur), satırda **HTTP** rozeti
+  gösterilir, olmadı ise hata mesajı asıl nedeni söyler.
+- Bulanık arama (Fuse.js), ülke ve tür şeritleri, ISO kodundan türetilen
+  bayraklar, dizin kayıtlarında codec/bitrate rozetleri
+- Alt oynatıcı çubuğu: çal/duraklat, önceki/sonraki, ses seviyesi (kalıcı)
+- **Klavye** — `/` aramaya odaklanır, `Esc` temizler; satırlar Tab ile
+  gezilir, Enter/Space çalar; `prefers-reduced-motion` süslemeleri durdurur
 
 ## Kullanım
 
@@ -25,7 +37,7 @@ yolundan yükleniyor.
 
 ```bash
 npm ci
-npm run build     # → dist/js/index.js  (~35 KB)
+npm run build     # → dist/js/index.js (~44 KB) + hls-*.js (ayrı parça, istenince yüklenir)
 npm run start     # yerel sunucu (python3 -m http.server)
 ```
 
