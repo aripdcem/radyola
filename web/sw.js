@@ -28,6 +28,7 @@ const SHELL = [
   "./radyola.svg",
   "./manifest.webmanifest",
   "./dist/js/index.js",
+  "./fonts/InterVariable.woff2",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];

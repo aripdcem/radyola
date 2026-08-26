@@ -1,5 +1,15 @@
 import Fuse from "fuse.js";
 
+import { LANGS, pickLang } from "./i18n.js";
+import {
+  flagOf,
+  isHlsStream,
+  isInsecure,
+  playableUrl,
+  safeWebsite,
+  stationKey,
+} from "./utils.js";
+
 /**
  * İki liste, aynı şema (bkz. data/README.md).
  *
@@ -57,52 +67,8 @@ function el(tag, cls, attrs) {
   return e;
 }
 
-/**
- * ISO 3166-1 alpha-2 kodunu bayrak emoji'sine çevirir: "TR" → 🇹🇷
- * Her harf Unicode regional indicator karşılığına kaydırılır.
- */
-function flagOf(code) {
-  if (!code || code.length !== 2 || !/^[a-z]{2}$/i.test(code)) return "";
-  return [...code.toUpperCase()]
-    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
-    .join("");
-}
-
-/** İstasyonu benzersiz kılan anahtar — iki liste arasında da çakışmaz. */
-function stationKey(s) {
-  return `${s.name}|${s.url}`;
-}
-
-/**
- * Web sitesi bağlantısı olarak kullanılabilir mi?
- *
- * Discover verisi radio-browser.info'dan geliyor — herkesin düzenleyebildiği
- * bir veritabanı. `javascript:` gibi şemaları eleyip yalnız http(s) kabul
- * ediyoruz; adres ayrıca HTML'e gömülmez, DOM üzerinden atanır (bkz. _appendRows).
- */
-function safeWebsite(url) {
-  return /^https?:\/\//i.test(url) ? url : "";
-}
-
-/**
- * Sayfa HTTPS'ten sunulurken http:// akışı tarayıcı engeller (karışık içerik) —
- * dizindeki 3.400 istasyonun ~1.900'ü böyle. Şemayı https'e çevirip deniyoruz:
- * sunucu TLS konuşuyorsa çalar; konuşmuyorsa hata yoluna düşer ve kullanıcıya
- * asıl neden söylenir (bkz. audio error dinleyicisi).
- */
-function playableUrl(url) {
-  return isInsecure(url) ? "https://" + url.slice("http://".length) : url;
-}
-
-/** HTTPS sayfada engellenecek (yalnız http:// yayınlayan) akış mı? */
-function isInsecure(url) {
-  return location.protocol === "https:" && url.startsWith("http://");
-}
-
-/** HLS akışı mı? Dizin verisi işaretliyor; kuratörlü listede uzantıya bakılır. */
-function isHlsStream(s) {
-  return s.hls || /\.m3u8(\?|$)/i.test(s.url);
-}
+/* Saf yardımcılar utils.js'te, dil tablosu i18n.js'te — birim testleri
+   onları hedefliyor (web/test/). */
 
 /* localStorage gizli pencerede ya da veri engelli tarayıcıda fırlatabilir;
    kalıcılık bir kolaylık, yokluğu uygulamayı düşürmemeli. */
@@ -122,88 +88,33 @@ function storeWrite(key, value) {
   }
 }
 
-/* ── i18n ─────────────────────────────────────────────────── */
+/* ── font ─────────────────────────────────────────────────── */
 /**
- * İki dil, tek tablo. Seçim sırası: <aripd-radyola lang="tr|en"> özniteliği
- * (gömen sayfa karar verebilsin), yoksa tarayıcı dili. Sözcük dizilişi dile
- * göre değiştiği için ad taşıyan etiketler fonksiyon (playLabel, favLabel).
+ * Inter'i belge düzeyinde kaydeder. Gölge DOM stil dosyasına @font-face
+ * yazmak yetmiyor: Chromium ve Firefox gölge stilindeki font tanımını belge
+ * yazı kümesine işlemiyor, metin sessizce sistem yazısına düşüyor (Google
+ * Fonts @import'lu eski kurulumda da böyleydi). FontFace API belge kümesine
+ * doğrudan ekler; gömen sayfalar da ek iş yapmadan kazanır.
+ *
+ * Yol, CSS gibi belgeye göre çözülür — fonts/ dizini radyola-player.css'in
+ * yanında taşınmalı (bkz. README).
  */
-const LANGS = {
-  en: {
-    tagline: "Curated internet radio stations from around the world",
-    tabCurated: "Curated",
-    tabDiscover: "Discover",
-    tabFavorites: "Favorites",
-    searchCurated: "Search stations...",
-    searchDirectory: "Search thousands of stations...",
-    searchFavorites: "Search favorites...",
-    searchAria: "Search stations",
-    clearSearch: "Clear search",
-    stationList: "Station list",
-    all: "All",
-    allGenres: "All Genres",
-    noStations: "No stations found",
-    noFavorites: "No favorites yet — tap the ♥ on any station to keep it here",
-    loadFailed: "Failed to load stations.",
-    retry: "Try again",
-    selectStation: "Select a station",
-    errGeneric: "Stream unavailable — try another station",
-    errHttp: "HTTP-only stream — blocked by the browser",
-    errHlsLoad: "Could not load HLS support — check your connection",
-    errHlsUnsupported: "This browser cannot play HLS streams",
-    httpTitle: "HTTP-only stream — may not play in the browser",
-    website: "Visit website",
-    favorite: "Favorite",
-    prevStation: "Previous station",
-    nextStation: "Next station",
-    playPause: "Play/Pause",
-    volume: "Volume",
-    share: "Share station",
-    linkCopied: "Link copied",
-    playLabel: (name) => `Play ${name}`,
-    favLabel: (name) => `Favorite ${name}`,
-  },
-  tr: {
-    tagline: "Dünyanın dört bir yanından seçme internet radyoları",
-    tabCurated: "Seçki",
-    tabDiscover: "Keşfet",
-    tabFavorites: "Favoriler",
-    searchCurated: "İstasyon ara...",
-    searchDirectory: "Binlerce istasyonda ara...",
-    searchFavorites: "Favorilerde ara...",
-    searchAria: "İstasyon ara",
-    clearSearch: "Aramayı temizle",
-    stationList: "İstasyon listesi",
-    all: "Tümü",
-    allGenres: "Tüm Türler",
-    noStations: "İstasyon bulunamadı",
-    noFavorites: "Henüz favori yok — istasyonların ♥ simgesine dokun",
-    loadFailed: "İstasyonlar yüklenemedi.",
-    retry: "Tekrar dene",
-    selectStation: "Bir istasyon seç",
-    errGeneric: "Yayın açılamadı — başka bir istasyon dene",
-    errHttp: "Yalnız HTTP yayını — tarayıcı engelledi",
-    errHlsLoad: "HLS desteği yüklenemedi — bağlantını kontrol et",
-    errHlsUnsupported: "Bu tarayıcı HLS akışı çalamıyor",
-    httpTitle: "Yalnız HTTP yayını — tarayıcıda çalmayabilir",
-    website: "Siteye git",
-    favorite: "Favori",
-    prevStation: "Önceki istasyon",
-    nextStation: "Sonraki istasyon",
-    playPause: "Çal/Duraklat",
-    volume: "Ses düzeyi",
-    share: "İstasyonu paylaş",
-    linkCopied: "Bağlantı kopyalandı",
-    playLabel: (name) => `${name} çal`,
-    favLabel: (name) => `${name} favorilere`,
-  },
-};
-
-function pickLang(host) {
-  const attr = (host.getAttribute("lang") || "").toLowerCase();
-  if (attr.startsWith("tr")) return "tr";
-  if (attr.startsWith("en")) return "en";
-  return (navigator.language || "en").toLowerCase().startsWith("tr") ? "tr" : "en";
+const FONT_URL = "./fonts/InterVariable.woff2";
+function ensureInterFont() {
+  try {
+    const registered = [...document.fonts].some(
+      (f) => f.family.replace(/["']/g, "") === "Inter"
+    );
+    if (registered) return;
+    const face = new FontFace("Inter", `url(${FONT_URL}) format("woff2")`, {
+      weight: "100 900",
+      display: "swap",
+    });
+    document.fonts.add(face);
+    face.load().catch(() => { /* yüklenemezse system-ui yedeği iş görür */ });
+  } catch {
+    /* FontFace API yoksa da uygulama yazısız kalmaz */
+  }
 }
 
 /* ── CSS (loaded from external file into shadow DOM) ────── */
@@ -266,11 +177,12 @@ class AripdRadyola extends HTMLElement {
 
   connectedCallback() {
     // Öznitelikler kurucuda henüz garanti değil; dil seçimi burada yapılır.
-    this._t = LANGS[pickLang(this)];
+    this._t = LANGS[pickLang(this.getAttribute("lang"), navigator.language)];
     // #s=<istasyon anahtarı> derin bağlantısı: liste yüklenince seçilir
     // (çalınmaz — kullanıcı hareketi olmadan tarayıcı zaten izin vermez).
     const hash = location.hash.match(/^#s=(.+)$/);
     this._pendingLink = hash ? decodeURIComponent(hash[1]) : null;
+    ensureInterFont();
     this._render();
     this._fetchData();
   }
