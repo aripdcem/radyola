@@ -19,6 +19,15 @@ kullanır, sayfanın stilini etkilemez ve ondan etkilenmez.
   gösterilir, olmadı ise hata mesajı asıl nedeni söyler.
 - Bulanık arama (Fuse.js), ülke ve tür şeritleri, ISO kodundan türetilen
   bayraklar, dizin kayıtlarında codec/bitrate rozetleri
+- **TR/EN arayüz** — tarayıcı diline göre otomatik; gömen sayfa
+  `<aripd-radyola lang="tr">` (ya da `en`) ile sabitleyebilir. Metinlerin
+  tamamı tek tabloda (`LANGS`).
+- **Derin bağlantı + paylaş** — çalan istasyon adres çubuğuna `#s=…` olarak
+  yazılır (geçmişi şişirmeden, `replaceState`). Bu bağlantıyla gelen
+  ziyaretçide istasyon çubukta duraklatılmış hazır bekler; kuratörlü listede
+  yoksa dizin arka planda çekilip oradan bulunur. Paylaş düğmesi yerel
+  paylaşım menüsünü açar, yoksa bağlantıyı panoya kopyalar.
+- Aramada temizle (×) düğmesi; veri yüklenemezse "Tekrar dene" düğmesi
 - Alt oynatıcı çubuğu: çal/duraklat, önceki/sonraki, ses seviyesi (kalıcı)
 - **Klavye** — `/` aramaya odaklanır, `Esc` temizler; satırlar Tab ile
   gezilir, Enter/Space çalar; `prefers-reduced-motion` süslemeleri durdurur
