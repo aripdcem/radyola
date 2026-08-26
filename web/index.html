@@ -8,6 +8,9 @@
     <meta name="description" content="A premium internet radio player with curated stations from around the world.">
     <meta name="theme-color" content="#0a0a1a">
     <link rel="icon" href="./radyola.svg">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-title" content="Radyola">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; background: #0a0a1a; overflow-x: hidden; }
@@ -17,6 +20,15 @@
 <body>
     <aripd-radyola></aripd-radyola>
     <script type="module" src="./dist/js/index.js"></script>
+    <script>
+        // Kayıt ana sayfanın işi, bileşenin değil: bileşen başka sitelere de
+        // gömülebiliyor; oralarda SW dayatmak ev sahibinin kararını çiğnerdi.
+        if ("serviceWorker" in navigator) {
+            addEventListener("load", () => {
+                navigator.serviceWorker.register("./sw.js").catch(() => { /* çevrimdışı ilk ziyaret vb. */ });
+            });
+        }
+    </script>
 </body>
 
 </html>
