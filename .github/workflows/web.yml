@@ -68,8 +68,14 @@ jobs:
         run: |
           mkdir -p public/data
           cp web/index.html web/radyola.svg web/radyola-player.css public/
+          cp web/manifest.webmanifest web/sw.js public/
+          cp -r web/icons public/
           cp -r web/dist public/
           cp data/*.json public/data/
+          # Service worker her dağıtımda commit'le damgalanır: baytları değişir,
+          # tarayıcı yeni SW'yi kurar, install taze kabuğu indirir.
+          sed -i "s/__BUILD__/${GITHUB_SHA::12}/" public/sw.js
+          grep -m1 'const VERSION' public/sw.js
           find public -type f | sort
 
       - name: Özel alan adı

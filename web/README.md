@@ -22,6 +22,14 @@ kullanır, sayfanın stilini etkilemez ve ondan etkilenmez.
 - Alt oynatıcı çubuğu: çal/duraklat, önceki/sonraki, ses seviyesi (kalıcı)
 - **Klavye** — `/` aramaya odaklanır, `Esc` temizler; satırlar Tab ile
   gezilir, Enter/Space çalar; `prefers-reduced-motion` süslemeleri durdurur
+- **PWA** — telefona/masaüstüne uygulama olarak kurulabilir
+  (`manifest.webmanifest` + `icons/`). `sw.js` kabuğu çevrimdışı açar ve
+  istasyon listelerini önbellekten anında verir: arka planda ETag ile koşullu
+  GET atılır, veri değişmemişse sunucu 304 döner ve 1,2 MB'lık dizin yeniden
+  inmez. Ses akışlarına ve başka kökenlere hiç karışmaz. SW kaydı ana
+  sayfanın işi (`index.html`) — bileşeni başka siteye gömen, SW almaz.
+  Dağıtımda `__BUILD__` commit özetiyle damgalanır (`web.yml`); her dağıtım
+  SW'yi yeniler, eski önbellekler `activate`'te silinir.
 
 ## Kullanım
 
