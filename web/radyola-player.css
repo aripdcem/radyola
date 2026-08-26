@@ -1,4 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* Inter kendi sunumumuzdan gelir (fonts/, OFL lisansı yanında) ama BURADA
+   @font-face yok: gölge DOM stilindeki @font-face Chromium/Firefox'ta belge
+   yazı kümesine işlenmiyor — kayıt JS'te FontFace API ile belge düzeyinde
+   yapılıyor (bkz. src/index.js ensureInterFont). Yazı yüklenemezse
+   system-ui yedeği devrede. */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

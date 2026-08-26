@@ -54,9 +54,19 @@ yolundan yükleniyor.
 
 ```bash
 npm ci
-npm run build     # → dist/js/index.js (~44 KB) + hls-*.js (ayrı parça, istenince yüklenir)
+npm test          # birim testleri (vitest) — saf yardımcılar: src/utils.js, src/i18n.js
+npm run build     # → dist/js/index.js (~52 KB) + hls-*.js (ayrı parça, istenince yüklenir)
 npm run start     # yerel sunucu (python3 -m http.server)
 ```
+
+Kod üç modül: `src/index.js` (bileşen), `src/utils.js` (DOM'suz saf
+yardımcılar), `src/i18n.js` (dil tablosu + seçim). Testler saf modülleri
+hedefler ve CI'da her PR'da koşar (`web.yml`).
+
+Inter fontu `fonts/` altından, kendi sunumumuzdan gelir (OFL lisansı
+yanında) — Google Fonts'a istek çıkmaz. Bileşeni başka sayfaya gömerken
+`radyola-player.css`'in yanında `fonts/` dizinini de taşıyın; taşınmazsa
+sistem yazı tipine düşer.
 
 ## Ölçek notları
 

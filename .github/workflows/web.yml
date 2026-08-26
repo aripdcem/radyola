@@ -60,6 +60,10 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Birim testleri
+        working-directory: web
+        run: npm test
+
       - name: Derle
         working-directory: web
         run: npm run build
@@ -69,7 +73,7 @@ jobs:
           mkdir -p public/data
           cp web/index.html web/radyola.svg web/radyola-player.css public/
           cp web/manifest.webmanifest web/sw.js public/
-          cp -r web/icons public/
+          cp -r web/icons web/fonts public/
           cp -r web/dist public/
           cp data/*.json public/data/
           # Service worker her dağıtımda commit'le damgalanır: baytları değişir,
